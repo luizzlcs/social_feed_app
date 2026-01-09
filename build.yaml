@@ -1,7 +1,7 @@
 targets:
   $default:
     builders:
-      mobx_codegen:
+      mobx_codegen:mobx_generator:
         options:
           store_class_prefix: ''
           store_file_prefix: ''
