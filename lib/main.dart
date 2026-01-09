@@ -1,39 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:social_feed_app/core/dependency_injection.dart';
 import 'package:social_feed_app/core/themes/app_theme.dart';
 import 'package:social_feed_app/presentation/pages/feed/feed_page.dart';
 import 'package:social_feed_app/presentation/pages/login/login_page.dart';
+import 'package:social_feed_app/presentation/stores/auth_store.dart';
 
 void main() {
+  // 1. Configurar as dependências
+  setupDependencies();
+  
+  // 2. Iniciar o app
   runApp(const MyApp());
 }
 
-class MyApp extends StatefulWidget {
+class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
-  @override
-  State<MyApp> createState() => _MyAppState();
-}
-
-class _MyAppState extends State<MyApp> {
-  bool _isLoggedIn = false;
-  String _username = '';
-
-  void _handleLogin(String username, String password) {
-    // Validação simples (depois vamos implementar melhor)
-    if (username.isNotEmpty && password.isNotEmpty) {
-      setState(() {
-        _isLoggedIn = true;
-        _username = username;
-      });
-    }
-  }
-
-  void _handleLogout() {
-    setState(() {
-      _isLoggedIn = false;
-      _username = '';
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -41,14 +23,27 @@ class _MyAppState extends State<MyApp> {
       title: 'Social Feed App',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
-      home: _isLoggedIn
-          ? FeedPage(
-              username: _username,
-              onLogout: _handleLogout,
-            )
-          : LoginPage(
-              onLogin: _handleLogin,
-            ),
+      home: const AppWrapper(),
+    );
+  }
+}
+
+class AppWrapper extends StatelessWidget {
+  const AppWrapper({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    // Obtém a instância do AuthStore via GetIt
+    final authStore = getIt<AuthStore>();
+    
+    return Observer(
+      builder: (_) {
+        if (authStore.isLoggedIn) {
+          return FeedPage(username: authStore.username);
+        } else {
+          return const LoginPage();
+        }
+      },
     );
   }
 }
