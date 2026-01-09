@@ -38,23 +38,27 @@ abstract class _PostStoreBase with Store {
           createdAt: DateTime.now().subtract(const Duration(hours: 2)),
           likes: 15,
           comments: 3,
-          imageUrl: null,
+          imageUrl:
+              'https://fastly.picsum.photos/id/1063/300/200.jpg?hmac=3NSszAipFt3celLaWYMQf-WPImvYZqvTdBOQ9IdYiB4',
         ),
         Post(
           id: '2',
           userId: 'user2',
           username: 'Maria Santos',
-          content: 'Alguém tem dicas de lugares bons para estudar programação online?',
+          content:
+              'Alguém tem dicas de lugares bons para estudar programação online?',
           createdAt: DateTime.now().subtract(const Duration(hours: 5)),
           likes: 8,
           comments: 7,
-          imageUrl: null,
+          imageUrl:
+              'https://fastly.picsum.photos/id/1049/300/200.jpg?hmac=ePeq3HC-esKhCllfQeuuv1bFGwOQ0z_fnqWVPUAMLWo',
         ),
         Post(
           id: '3',
           userId: 'user3',
           username: 'Pedro Costa',
-          content: 'Acabei de terminar meu primeiro app mobile! 😎\n\nFoi uma jornada incrível de aprendizado.',
+          content:
+              'Acabei de terminar meu primeiro app mobile! 😎\n\nFoi uma jornada incrível de aprendizado.',
           createdAt: DateTime.now().subtract(const Duration(days: 1)),
           likes: 42,
           comments: 12,
@@ -64,17 +68,20 @@ abstract class _PostStoreBase with Store {
           id: '4',
           userId: 'user4',
           username: 'Ana Oliveira',
-          content: 'Dia produtivo hoje! Consegui resolver aquele bug que estava me atormentando há semanas. 💪',
+          content:
+              'Dia produtivo hoje! Consegui resolver aquele bug que estava me atormentando há semanas. 💪',
           createdAt: DateTime.now().subtract(const Duration(days: 2)),
           likes: 25,
           comments: 5,
-          imageUrl: null,
+          imageUrl:
+              'https://fastly.picsum.photos/id/425/300/200.jpg?hmac=kAaOV1gnGa3vs85LhkvP1SxTYQFk0A8lu4lq2jGYk9s',
         ),
         Post(
           id: '5',
           userId: 'user5',
           username: 'Carlos Mendes',
-          content: 'Compartilhando um artigo muito interessante sobre arquitetura limpa em Flutter. Recomendo a leitura!',
+          content:
+              'Compartilhando um artigo muito interessante sobre arquitetura limpa em Flutter. Recomendo a leitura!',
           createdAt: DateTime.now().subtract(const Duration(days: 3)),
           likes: 31,
           comments: 9,
@@ -188,10 +195,38 @@ abstract class _PostStoreBase with Store {
     selectedPost = null;
   }
 
+  // Action para criar post com imagem
+  @action
+  Future<void> createPostWithImage(String content, String? imagePath) async {
+    isLoading = true;
+
+    try {
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      final newPost = Post(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        userId: 'current_user',
+        username: 'Você',
+        content: content,
+        createdAt: DateTime.now(),
+        likes: 0,
+        comments: 0,
+        imageUrl: imagePath, // Agora aceita caminho local da imagem
+      );
+
+      // Adiciona no início da lista
+      posts.insert(0, newPost);
+    } catch (e) {
+      errorMessage = 'Erro ao criar post: $e';
+    } finally {
+      isLoading = false;
+    }
+  }
+
   // Computed: posts ordenados por data (mais recente primeiro)
   @computed
-  List<Post> get sortedPosts => posts.toList()
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  List<Post> get sortedPosts =>
+      posts.toList()..sort((a, b) => b.createdAt.compareTo(a.createdAt));
 
   // Computed: total de posts
   @computed

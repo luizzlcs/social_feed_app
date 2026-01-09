@@ -5,14 +5,13 @@ import 'package:social_feed_app/domain/entities/post.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
 import 'package:social_feed_app/presentation/stores/post_store.dart';
 import 'package:social_feed_app/presentation/widgets/post_card.dart';
+import 'package:social_feed_app/presentation/pages/post_detail/post_detail_page.dart';
+import 'package:social_feed_app/presentation/pages/create_post/create_post_page.dart';
 
 class FeedPage extends StatefulWidget {
   final String username;
-  
-  const FeedPage({
-    super.key,
-    required this.username,
-  });
+
+  const FeedPage({super.key, required this.username});
 
   @override
   State<FeedPage> createState() => _FeedPageState();
@@ -21,13 +20,13 @@ class FeedPage extends StatefulWidget {
 class _FeedPageState extends State<FeedPage> {
   late final AuthStore _authStore;
   late final PostStore _postStore;
-  
+
   @override
   void initState() {
     super.initState();
     _authStore = getIt<AuthStore>();
     _postStore = getIt<PostStore>();
-    
+
     // Carrega os posts quando a tela é aberta
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _postStore.loadPosts();
@@ -139,7 +138,7 @@ class _FeedPageState extends State<FeedPage> {
                 Observer(
                   builder: (_) {
                     if (_postStore.totalPosts == 0) return const SizedBox();
-                    
+
                     return Container(
                       padding: const EdgeInsets.all(12),
                       color: Colors.blue[50],
@@ -183,7 +182,7 @@ class _FeedPageState extends State<FeedPage> {
                     );
                   },
                 ),
-                
+
                 // Lista de posts
                 Expanded(
                   child: ListView.builder(
@@ -193,6 +192,15 @@ class _FeedPageState extends State<FeedPage> {
                       final post = _postStore.sortedPosts[index];
                       return PostCard(
                         post: post,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  PostDetailPage(postId: post.id),
+                            ),
+                          );
+                        },
                         onLike: () => _postStore.likePost(post.id),
                         onComment: () => _postStore.addComment(post.id),
                         onEdit: () => _showEditPostDialog(post),
@@ -210,51 +218,34 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   void _showCreatePostDialog() {
-    final TextEditingController controller = TextEditingController();
-    
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Novo Post'),
-          content: TextField(
-            controller: controller,
-            maxLines: 4,
-            decoration: const InputDecoration(
-              hintText: 'O que você está pensando?',
-              border: OutlineInputBorder(),
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => CreatePostPage(
+        onPostCreated: (content, imagePath) async {
+          if (imagePath != null) {
+            await _postStore.createPostWithImage(content, imagePath);
+          } else {
+            await _postStore.createPost(content);
+          }
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Post criado com sucesso!'),
+              backgroundColor: Colors.green,
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancelar'),
-            ),
-            Observer(
-              builder: (_) {
-                return ElevatedButton(
-                  onPressed: _postStore.isLoading
-                      ? null
-                      : () async {
-                          if (controller.text.trim().isNotEmpty) {
-                            await _postStore.createPost(controller.text.trim());
-                            Navigator.pop(context);
-                          }
-                        },
-                  child: const Text('Publicar'),
-                );
-              },
-            ),
-          ],
-        );
-      },
-    );
-  }
+          );
+        },
+      ),
+    ),
+  );
+}
 
   void _showEditPostDialog(Post post) {
-    final TextEditingController controller = 
-        TextEditingController(text: post.content);
-    
+    final TextEditingController controller = TextEditingController(
+      text: post.content,
+    );
+
     showDialog(
       context: context,
       builder: (context) {
@@ -318,9 +309,7 @@ class _FeedPageState extends State<FeedPage> {
                           await _postStore.deletePost(postId);
                           Navigator.pop(context);
                         },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
+                  style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
                   child: const Text('Excluir'),
                 );
               },

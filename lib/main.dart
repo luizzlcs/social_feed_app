@@ -39,6 +39,7 @@ class AppWrapper extends StatelessWidget {
     return Observer(
       builder: (_) {
         if (authStore.isLoggedIn) {
+          
           return FeedPage(username: authStore.username);
         } else {
           return const LoginPage();

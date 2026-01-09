@@ -144,6 +144,18 @@ mixin _$PostStore on _PostStoreBase, Store {
     return _$deletePostAsyncAction.run(() => super.deletePost(postId));
   }
 
+  late final _$createPostWithImageAsyncAction = AsyncAction(
+    '_PostStoreBase.createPostWithImage',
+    context: context,
+  );
+
+  @override
+  Future<void> createPostWithImage(String content, String? imagePath) {
+    return _$createPostWithImageAsyncAction.run(
+      () => super.createPostWithImage(content, imagePath),
+    );
+  }
+
   late final _$_PostStoreBaseActionController = ActionController(
     name: '_PostStoreBase',
     context: context,

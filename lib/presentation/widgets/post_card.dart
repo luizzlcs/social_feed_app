@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
+import 'package:social_feed_app/presentation/widgets/universal_image.dart'; // NOVO IMPORT
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -135,25 +136,16 @@ class PostCard extends StatelessWidget {
                 style: const TextStyle(fontSize: 15),
               ),
               
-              // Imagem do post (se houver)
+              // Imagem do post (se houver) - USANDO UNIVERSAL IMAGE
               if (post.imageUrl != null) ...[
                 const SizedBox(height: 12),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    post.imageUrl!,
+                  child: UniversalImage.fromPathOrUrl(
+                    pathOrUrl: post.imageUrl,
                     height: 200,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Container(
-                        height: 200,
-                        color: Colors.grey[300],
-                        child: const Center(
-                          child: Icon(Icons.broken_image, size: 50),
-                        ),
-                      );
-                    },
                   ),
                 ),
               ],

@@ -1,4 +1,5 @@
 import 'package:get_it/get_it.dart';
+import 'package:social_feed_app/core/services/camera_service.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
 import 'package:social_feed_app/presentation/stores/post_store.dart';
 
@@ -11,5 +12,7 @@ void setupDependencies() {
   // Registra o PostStore como Singleton
   getIt.registerLazySingleton(() => PostStore());
   
+   // Registra o CameraService como Singleton
+  getIt.registerLazySingleton(() => CameraService());
   
 }
