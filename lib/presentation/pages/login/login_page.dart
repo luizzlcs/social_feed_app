@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:social_feed_app/core/dependency_injection.dart';
+import 'package:social_feed_app/presentation/stores/auth_store.dart';
 import 'package:social_feed_app/presentation/widgets/custom_button.dart';
 
 class LoginPage extends StatefulWidget {
-  final Function(String, String) onLogin;
-  
-  const LoginPage({
-    super.key,
-    required this.onLogin,
-  });
+  const LoginPage({super.key});
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -17,29 +15,9 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
-  bool _isLoading = false;
-
-  void _handleLogin() {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-      
-      widget.onLogin(
-        _usernameController.text,
-        _passwordController.text,
-      );
-      
-      // Simula o loading (depois vamos remover isso)
-      Future.delayed(const Duration(seconds: 1), () {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-          });
-        }
-      });
-    }
-  }
+  
+  // Obtém a instância do AuthStore
+  final AuthStore _authStore = getIt<AuthStore>();
 
   @override
   Widget build(BuildContext context) {
@@ -54,11 +32,16 @@ class _LoginPageState extends State<LoginPage> {
                 const FlutterLogo(size: 100),
                 const SizedBox(height: 30),
                 
-                Text(
-                  'Social Feed',
-                  style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+                // Usando Observer para reagir a mudanças no store
+                Observer(
+                  builder: (_) {
+                    return Text(
+                      _authStore.greeting,
+                      style: Theme.of(context).textTheme.headlineLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 10),
                 Text(
@@ -105,12 +88,43 @@ class _LoginPageState extends State<LoginPage> {
                           return null;
                         },
                       ),
+                      
+                      // Exibir mensagem de erro do store
+                      Observer(
+                        builder: (_) {
+                          if (_authStore.errorMessage != null) {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 16),
+                              child: Text(
+                                _authStore.errorMessage!,
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
+                              ),
+                            );
+                          }
+                          return const SizedBox();
+                        },
+                      ),
+                      
                       const SizedBox(height: 30),
                       
-                      CustomButton(
-                        text: 'Entrar',
-                        onPressed: _handleLogin,
-                        isLoading: _isLoading,
+                      // Botão de login usando Observer
+                      Observer(
+                        builder: (_) {
+                          return CustomButton(
+                            text: 'Entrar',
+                            onPressed: () async {
+                              if (_formKey.currentState!.validate()) {
+                                await _authStore.login(
+                                  _usernameController.text,
+                                  _passwordController.text,
+                                );
+                              }
+                            },
+                            isLoading: _authStore.isLoading,
+                          );
+                        },
                       ),
                       
                       const SizedBox(height: 20),
