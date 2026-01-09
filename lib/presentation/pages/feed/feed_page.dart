@@ -1,57 +1,333 @@
 import 'package:flutter/material.dart';
-import 'package:social_feed_app/presentation/widgets/custom_button.dart';
+import 'package:flutter_mobx/flutter_mobx.dart';
+import 'package:social_feed_app/core/dependency_injection.dart';
+import 'package:social_feed_app/domain/entities/post.dart';
+import 'package:social_feed_app/presentation/stores/auth_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/widgets/post_card.dart';
 
-class FeedPage extends StatelessWidget {
+class FeedPage extends StatefulWidget {
   final String username;
-  final VoidCallback onLogout;
   
   const FeedPage({
     super.key,
     required this.username,
-    required this.onLogout,
   });
+
+  @override
+  State<FeedPage> createState() => _FeedPageState();
+}
+
+class _FeedPageState extends State<FeedPage> {
+  late final AuthStore _authStore;
+  late final PostStore _postStore;
+  
+  @override
+  void initState() {
+    super.initState();
+    _authStore = getIt<AuthStore>();
+    _postStore = getIt<PostStore>();
+    
+    // Carrega os posts quando a tela é aberta
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _postStore.loadPosts();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feed'),
+        title: Observer(
+          builder: (_) {
+            return Row(
+              children: [
+                const Text('Feed'),
+                const SizedBox(width: 8),
+                if (_postStore.totalPosts > 0)
+                  Chip(
+                    label: Text('${_postStore.totalPosts}'),
+                    backgroundColor: Colors.white,
+                  ),
+              ],
+            );
+          },
+        ),
         actions: [
+          // Botão para criar novo post
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showCreatePostDialog,
+          ),
           IconButton(
             icon: const Icon(Icons.logout),
-            onPressed: onLogout,
+            onPressed: _authStore.logout,
           ),
         ],
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.check_circle, color: Colors.green, size: 80),
-            const SizedBox(height: 20),
-            Text(
-              'Bem-vindo, $username!',
-              style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Você está logado com sucesso!',
-              style: TextStyle(fontSize: 16, color: Colors.grey),
-            ),
-            const SizedBox(height: 30),
-            ElevatedButton(
-              onPressed: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Em breve teremos posts aqui!'),
+      body: Observer(
+        builder: (_) {
+          if (_postStore.isLoading && _postStore.posts.isEmpty) {
+            return const Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 16),
+                  Text('Carregando posts...'),
+                ],
+              ),
+            );
+          }
+
+          if (_postStore.errorMessage != null && _postStore.posts.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error, color: Colors.red, size: 50),
+                  const SizedBox(height: 16),
+                  Text(
+                    _postStore.errorMessage!,
+                    style: const TextStyle(color: Colors.red),
                   ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: _postStore.loadPosts,
+                    child: const Text('Tentar novamente'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          if (_postStore.posts.isEmpty) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.feed, size: 80, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Nenhum post ainda',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.grey,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Seja o primeiro a compartilhar algo!',
+                    style: TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: _showCreatePostDialog,
+                    child: const Text('Criar primeiro post'),
+                  ),
+                ],
+              ),
+            );
+          }
+
+          return RefreshIndicator(
+            onRefresh: () => _postStore.loadPosts(),
+            child: Column(
+              children: [
+                // Estatísticas rápidas
+                Observer(
+                  builder: (_) {
+                    if (_postStore.totalPosts == 0) return const SizedBox();
+                    
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      color: Colors.blue[50],
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          Column(
+                            children: [
+                              Text(
+                                '${_postStore.totalPosts}',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue,
+                                ),
+                              ),
+                              const Text(
+                                'Posts',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '${_postStore.totalLikes}',
+                                style: const TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.red,
+                                ),
+                              ),
+                              const Text(
+                                'Curtidas',
+                                style: TextStyle(fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+                
+                // Lista de posts
+                Expanded(
+                  child: ListView.builder(
+                    padding: const EdgeInsets.only(top: 8),
+                    itemCount: _postStore.sortedPosts.length,
+                    itemBuilder: (context, index) {
+                      final post = _postStore.sortedPosts[index];
+                      return PostCard(
+                        post: post,
+                        onLike: () => _postStore.likePost(post.id),
+                        onComment: () => _postStore.addComment(post.id),
+                        onEdit: () => _showEditPostDialog(post),
+                        onDelete: () => _showDeletePostDialog(post.id),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showCreatePostDialog() {
+    final TextEditingController controller = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Novo Post'),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'O que você está pensando?',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            Observer(
+              builder: (_) {
+                return ElevatedButton(
+                  onPressed: _postStore.isLoading
+                      ? null
+                      : () async {
+                          if (controller.text.trim().isNotEmpty) {
+                            await _postStore.createPost(controller.text.trim());
+                            Navigator.pop(context);
+                          }
+                        },
+                  child: const Text('Publicar'),
                 );
               },
-              child: const Text('Ver Posts'),
             ),
           ],
-        ),
-      ),
+        );
+      },
+    );
+  }
+
+  void _showEditPostDialog(Post post) {
+    final TextEditingController controller = 
+        TextEditingController(text: post.content);
+    
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Editar Post'),
+          content: TextField(
+            controller: controller,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              hintText: 'Edite seu post...',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            Observer(
+              builder: (_) {
+                return ElevatedButton(
+                  onPressed: _postStore.isLoading
+                      ? null
+                      : () async {
+                          if (controller.text.trim().isNotEmpty) {
+                            await _postStore.updatePost(
+                              post.id,
+                              controller.text.trim(),
+                            );
+                            Navigator.pop(context);
+                          }
+                        },
+                  child: const Text('Salvar'),
+                );
+              },
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showDeletePostDialog(String postId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Excluir Post'),
+          content: const Text('Tem certeza que deseja excluir este post?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            Observer(
+              builder: (_) {
+                return ElevatedButton(
+                  onPressed: _postStore.isLoading
+                      ? null
+                      : () async {
+                          await _postStore.deletePost(postId);
+                          Navigator.pop(context);
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red,
+                  ),
+                  child: const Text('Excluir'),
+                );
+              },
+            ),
+          ],
+        );
+      },
     );
   }
 }
