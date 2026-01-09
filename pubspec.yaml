@@ -27,7 +27,6 @@ environment:
 # dependencies can be manually updated by changing the version numbers below to
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
-
 dependencies:
   flutter:
     sdk: flutter
@@ -37,6 +36,10 @@ dependencies:
   mobx: ^2.3.0
   flutter_mobx: ^2.2.0
 
+   # Service Locator
+  get_it: ^9.2.0
+
+#-----------------------------------------------
 dev_dependencies:
   flutter_test:
     sdk: flutter
