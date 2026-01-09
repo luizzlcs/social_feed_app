@@ -1,0 +1,7 @@
+targets:
+  $default:
+    builders:
+      mobx_codegen:
+        options:
+          store_class_prefix: ''
+          store_file_prefix: ''
