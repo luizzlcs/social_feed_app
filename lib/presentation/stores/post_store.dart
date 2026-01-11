@@ -39,7 +39,7 @@ abstract class _PostStoreBase with Store {
           likes: 15,
           comments: 3,
           imageUrl:
-              'https://fastly.picsum.photos/id/1063/300/200.jpg?hmac=3NSszAipFt3celLaWYMQf-WPImvYZqvTdBOQ9IdYiB4',
+              'https://picsum.photos/400/300?random=1',
         ),
         Post(
           id: '2',
@@ -51,7 +51,7 @@ abstract class _PostStoreBase with Store {
           likes: 8,
           comments: 7,
           imageUrl:
-              'https://fastly.picsum.photos/id/1049/300/200.jpg?hmac=ePeq3HC-esKhCllfQeuuv1bFGwOQ0z_fnqWVPUAMLWo',
+              'https://picsum.photos/400/300?random=2',
         ),
         Post(
           id: '3',
@@ -62,7 +62,7 @@ abstract class _PostStoreBase with Store {
           createdAt: DateTime.now().subtract(const Duration(days: 1)),
           likes: 42,
           comments: 12,
-          imageUrl: 'https://picsum.photos/400/300?random=1',
+          imageUrl: 'https://picsum.photos/400/300?random=3',
         ),
         Post(
           id: '4',
@@ -74,7 +74,7 @@ abstract class _PostStoreBase with Store {
           likes: 25,
           comments: 5,
           imageUrl:
-              'https://fastly.picsum.photos/id/425/300/200.jpg?hmac=kAaOV1gnGa3vs85LhkvP1SxTYQFk0A8lu4lq2jGYk9s',
+              'https://picsum.photos/400/300?random=4',
         ),
         Post(
           id: '5',
@@ -85,7 +85,7 @@ abstract class _PostStoreBase with Store {
           createdAt: DateTime.now().subtract(const Duration(days: 3)),
           likes: 31,
           comments: 9,
-          imageUrl: 'https://picsum.photos/400/300?random=2',
+          imageUrl: 'https://picsum.photos/400/300?random=5',
         ),
       ];
 
