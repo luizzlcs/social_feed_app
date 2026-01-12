@@ -1,9 +1,12 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Post {
   final String id;
   final String userId;
   final String username;
   final String content;
   final DateTime createdAt;
+  final DateTime updatedAt;
   final int likes;
   final int comments;
   final String? imageUrl;
@@ -14,6 +17,7 @@ class Post {
     required this.username,
     required this.content,
     required this.createdAt,
+    required this.updatedAt,
     this.likes = 0,
     this.comments = 0,
     this.imageUrl,
@@ -36,6 +40,7 @@ class Post {
       username: username ?? this.username,
       content: content ?? this.content,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
       imageUrl: imageUrl ?? this.imageUrl,

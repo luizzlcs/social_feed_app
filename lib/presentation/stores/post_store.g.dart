@@ -100,6 +100,24 @@ mixin _$PostStore on _PostStoreBase, Store {
     });
   }
 
+  late final _$hasMorePostsAtom = Atom(
+    name: '_PostStoreBase.hasMorePosts',
+    context: context,
+  );
+
+  @override
+  bool get hasMorePosts {
+    _$hasMorePostsAtom.reportRead();
+    return super.hasMorePosts;
+  }
+
+  @override
+  set hasMorePosts(bool value) {
+    _$hasMorePostsAtom.reportWrite(value, super.hasMorePosts, () {
+      super.hasMorePosts = value;
+    });
+  }
+
   late final _$loadPostsAsyncAction = AsyncAction(
     '_PostStoreBase.loadPosts',
     context: context,
@@ -110,16 +128,36 @@ mixin _$PostStore on _PostStoreBase, Store {
     return _$loadPostsAsyncAction.run(() => super.loadPosts());
   }
 
+  late final _$loadMorePostsAsyncAction = AsyncAction(
+    '_PostStoreBase.loadMorePosts',
+    context: context,
+  );
+
+  @override
+  Future<void> loadMorePosts() {
+    return _$loadMorePostsAsyncAction.run(() => super.loadMorePosts());
+  }
+
+  late final _$createPostWithImageAsyncAction = AsyncAction(
+    '_PostStoreBase.createPostWithImage',
+    context: context,
+  );
+
+  @override
+  Future<void> createPostWithImage(String content, String? imagePath) {
+    return _$createPostWithImageAsyncAction.run(
+      () => super.createPostWithImage(content, imagePath),
+    );
+  }
+
   late final _$createPostAsyncAction = AsyncAction(
     '_PostStoreBase.createPost',
     context: context,
   );
 
   @override
-  Future<void> createPost(String content, {String? imageUrl}) {
-    return _$createPostAsyncAction.run(
-      () => super.createPost(content, imageUrl: imageUrl),
-    );
+  Future<void> createPost(String content) {
+    return _$createPostAsyncAction.run(() => super.createPost(content));
   }
 
   late final _$updatePostAsyncAction = AsyncAction(
@@ -144,46 +182,30 @@ mixin _$PostStore on _PostStoreBase, Store {
     return _$deletePostAsyncAction.run(() => super.deletePost(postId));
   }
 
-  late final _$createPostWithImageAsyncAction = AsyncAction(
-    '_PostStoreBase.createPostWithImage',
+  late final _$likePostAsyncAction = AsyncAction(
+    '_PostStoreBase.likePost',
     context: context,
   );
 
   @override
-  Future<void> createPostWithImage(String content, String? imagePath) {
-    return _$createPostWithImageAsyncAction.run(
-      () => super.createPostWithImage(content, imagePath),
-    );
+  Future<void> likePost(String postId) {
+    return _$likePostAsyncAction.run(() => super.likePost(postId));
+  }
+
+  late final _$addCommentAsyncAction = AsyncAction(
+    '_PostStoreBase.addComment',
+    context: context,
+  );
+
+  @override
+  Future<void> addComment(String postId) {
+    return _$addCommentAsyncAction.run(() => super.addComment(postId));
   }
 
   late final _$_PostStoreBaseActionController = ActionController(
     name: '_PostStoreBase',
     context: context,
   );
-
-  @override
-  void likePost(String postId) {
-    final _$actionInfo = _$_PostStoreBaseActionController.startAction(
-      name: '_PostStoreBase.likePost',
-    );
-    try {
-      return super.likePost(postId);
-    } finally {
-      _$_PostStoreBaseActionController.endAction(_$actionInfo);
-    }
-  }
-
-  @override
-  void addComment(String postId) {
-    final _$actionInfo = _$_PostStoreBaseActionController.startAction(
-      name: '_PostStoreBase.addComment',
-    );
-    try {
-      return super.addComment(postId);
-    } finally {
-      _$_PostStoreBaseActionController.endAction(_$actionInfo);
-    }
-  }
 
   @override
   void selectPost(Post post) {
@@ -216,6 +238,7 @@ posts: ${posts},
 isLoading: ${isLoading},
 errorMessage: ${errorMessage},
 selectedPost: ${selectedPost},
+hasMorePosts: ${hasMorePosts},
 sortedPosts: ${sortedPosts},
 totalPosts: ${totalPosts},
 totalLikes: ${totalLikes}
