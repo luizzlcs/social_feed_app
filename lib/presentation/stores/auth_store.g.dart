@@ -60,6 +60,42 @@ mixin _$AuthStore on _AuthStoreBase, Store {
     });
   }
 
+  late final _$userIdAtom = Atom(
+    name: '_AuthStoreBase.userId',
+    context: context,
+  );
+
+  @override
+  String? get userId {
+    _$userIdAtom.reportRead();
+    return super.userId;
+  }
+
+  @override
+  set userId(String? value) {
+    _$userIdAtom.reportWrite(value, super.userId, () {
+      super.userId = value;
+    });
+  }
+
+  late final _$userEmailAtom = Atom(
+    name: '_AuthStoreBase.userEmail',
+    context: context,
+  );
+
+  @override
+  String? get userEmail {
+    _$userEmailAtom.reportRead();
+    return super.userEmail;
+  }
+
+  @override
+  set userEmail(String? value) {
+    _$userEmailAtom.reportWrite(value, super.userEmail, () {
+      super.userEmail = value;
+    });
+  }
+
   late final _$isLoadingAtom = Atom(
     name: '_AuthStoreBase.isLoading',
     context: context,
@@ -102,8 +138,30 @@ mixin _$AuthStore on _AuthStoreBase, Store {
   );
 
   @override
-  Future<void> login(String username, String password) {
-    return _$loginAsyncAction.run(() => super.login(username, password));
+  Future<void> login(String email, String password) {
+    return _$loginAsyncAction.run(() => super.login(email, password));
+  }
+
+  late final _$registerAsyncAction = AsyncAction(
+    '_AuthStoreBase.register',
+    context: context,
+  );
+
+  @override
+  Future<void> register(String email, String password, String username) {
+    return _$registerAsyncAction.run(
+      () => super.register(email, password, username),
+    );
+  }
+
+  late final _$checkAuthStatusAsyncAction = AsyncAction(
+    '_AuthStoreBase.checkAuthStatus',
+    context: context,
+  );
+
+  @override
+  Future<void> checkAuthStatus() {
+    return _$checkAuthStatusAsyncAction.run(() => super.checkAuthStatus());
   }
 
   late final _$_AuthStoreBaseActionController = ActionController(
@@ -128,6 +186,8 @@ mixin _$AuthStore on _AuthStoreBase, Store {
     return '''
 isLoggedIn: ${isLoggedIn},
 username: ${username},
+userId: ${userId},
+userEmail: ${userEmail},
 isLoading: ${isLoading},
 errorMessage: ${errorMessage},
 canLogin: ${canLogin},

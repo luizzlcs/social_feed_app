@@ -4,7 +4,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:social_feed_app/core/services/firebase_service.dart';
-import 'package:social_feed_app/data/model/firebase_post_model.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 
 class FirebasePostRepository {
@@ -12,33 +11,33 @@ class FirebasePostRepository {
   
   FirebasePostRepository(this._firebaseService);
 
-  // ✅ CORRIGIDO: Stream de posts
-  Stream<List<Post>> getPostsStream() {
+  // ✅ ATUALIZADO: Stream de posts com informações de curtidas
+  Stream<List<Post>> getPostsStream({String? currentUserId}) {
     return _firebaseService.postsCollection
         .orderBy('createdAt', descending: true)
         .snapshots()
         .map((snapshot) {
           return snapshot.docs
-              .map((doc) => _convertDocumentToPost(doc))
+              .map((doc) => _convertDocumentToPost(doc, currentUserId: currentUserId))
               .toList();
         });
   }
 
-  // ✅ MELHORADO: Buscar posts paginados com suporte a DocumentSnapshot
+  // ✅ ATUALIZADO: Buscar posts com informações de curtidas do usuário
   Future<List<Post>> getPosts({
     int limit = 10,
-    DocumentSnapshot? lastDocument, // ← DocumentSnapshot em vez de Post
+    DocumentSnapshot? lastDocument,
+    String? currentUserId, // ✅ NOVO: para saber se usuário já curtiu
   }) async {
     try {
       if (kDebugMode) {
-        print('📄 getPosts: limit=$limit, lastDocument=${lastDocument?.id ?? "null"}');
+        print('📄 getPosts: limit=$limit, userId=${currentUserId ?? "null"}');
       }
       
       var query = _firebaseService.postsCollection
           .orderBy('createdAt', descending: true)
           .limit(limit);
 
-      // Se tem último documento para paginação
       if (lastDocument != null) {
         query = query.startAfterDocument(lastDocument);
       }
@@ -50,7 +49,7 @@ class FirebasePostRepository {
       }
       
       return snapshot.docs
-          .map((doc) => _convertDocumentToPost(doc))
+          .map((doc) => _convertDocumentToPost(doc, currentUserId: currentUserId))
           .toList();
     } catch (e) {
       if (kDebugMode) {
@@ -60,14 +59,24 @@ class FirebasePostRepository {
     }
   }
 
-  // ✅ MELHORADO: Método para converter documento em Post
-  Post _convertDocumentToPost(DocumentSnapshot doc) {
+  // ✅ ATUALIZADO: Converter documento com campo likedBy
+  Post _convertDocumentToPost(DocumentSnapshot doc, {String? currentUserId}) {
     try {
       final data = doc.data() as Map<String, dynamic>? ?? {};
       
       // Converte Timestamp para DateTime
       Timestamp? createdAt = data['createdAt'];
       Timestamp? updatedAt = data['updatedAt'];
+      
+      // ✅ NOVO: Extrai lista de quem curtiu
+      List<String> likedBy = [];
+      final likedByData = data['likedBy'];
+      if (likedByData is List) {
+        likedBy = likedByData.map((e) => e.toString()).toList();
+      }
+      
+      // ✅ NOVO: Verifica se usuário atual já curtiu (para UI)
+      bool isLikedByCurrentUser = currentUserId != null && likedBy.contains(currentUserId);
       
       return Post(
         id: doc.id,
@@ -79,49 +88,19 @@ class FirebasePostRepository {
         updatedAt: updatedAt?.toDate() ?? DateTime.now(),
         likes: (data['likes'] ?? 0).toInt(),
         comments: (data['comments'] ?? 0).toInt(),
+        likedBy: likedBy, // ✅ NOVO: Campo adicionado
+        isOptimistic: isLikedByCurrentUser, // ✅ Usado para marcar se usuário curtiu
       );
     } catch (e) {
       if (kDebugMode) {
         print('❌ ERRO em _convertDocumentToPost: $e');
+        print('Dados do documento: ${doc.data()}');
       }
       rethrow;
     }
   }
 
-  // ✅ NOVO: Método para obter último documento para paginação
-  Future<DocumentSnapshot?> getLastDocumentSnapshot() async {
-    try {
-      final snapshot = await _firebaseService.postsCollection
-          .orderBy('createdAt', descending: true)
-          .limit(1)
-          .get();
-      
-      return snapshot.docs.isNotEmpty ? snapshot.docs.first : null;
-    } catch (e) {
-      if (kDebugMode) {
-        print('⚠️ ERRO em getLastDocumentSnapshot: $e');
-      }
-      return null;
-    }
-  }
-
-  // Buscar post por ID
-  Future<Post?> getPostById(String postId) async {
-    try {
-      final doc = await _firebaseService.postsCollection.doc(postId).get();
-      if (doc.exists) {
-        return _convertDocumentToPost(doc);
-      }
-      return null;
-    } catch (e) {
-      if (kDebugMode) {
-        print('❌ ERRO em getPostById: $e');
-      }
-      rethrow;
-    }
-  }
-
-  // Criar novo post
+  // ✅ ATUALIZADO: Criar post com campo likedBy
   Future<Post> createPost(Post post, {String? imagePath}) async {
     if (kDebugMode) {
       print('🎯 REPOSITORY: Iniciando createPost');
@@ -142,7 +121,7 @@ class FirebasePostRepository {
         if (kDebugMode) print('✅ Imagem upload: ${imageUrl?.substring(0, 80)}...');
       }
 
-      // Usar FieldValue.serverTimestamp()
+      // ✅ ATUALIZADO: Inclui campo likedBy (inicialmente vazio)
       final postData = {
         'userId': post.userId,
         'username': post.username,
@@ -152,6 +131,7 @@ class FirebasePostRepository {
         'updatedAt': FieldValue.serverTimestamp(),
         'likes': post.likes,
         'comments': post.comments,
+        'likedBy': [], // ✅ NOVO: Array vazio inicial
       };
 
       if (kDebugMode) {
@@ -160,8 +140,7 @@ class FirebasePostRepository {
         print('  username: ${postData['username']}');
         print('  content: ${postData['content']}');
         print('  imageUrl: ${postData['imageUrl']}');
-        print('  createdAt: SERVER_TIMESTAMP');
-        print('  updatedAt: SERVER_TIMESTAMP');
+        print('  likedBy: [] (inicial)'); // ✅ NOVO
       }
 
       // Salvar no Firestore
@@ -170,8 +149,11 @@ class FirebasePostRepository {
       
       if (kDebugMode) print('✅ Post salvo no Firestore!');
       
-      // Retorna o post com a URL da imagem
-      return post.copyWith(imageUrl: imageUrl);
+      // Retorna o post com a URL da imagem e likedBy vazio
+      return post.copyWith(
+        imageUrl: imageUrl,
+        likedBy: [], // ✅ Garante que likedBy está inicializado
+      );
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('❌❌❌ ERRO em createPost: $e');
@@ -181,7 +163,7 @@ class FirebasePostRepository {
     }
   }
 
-  // Atualizar post
+  // ✅ ATUALIZADO: Atualizar post mantendo likedBy
   Future<Post> updatePost(Post post) async {
     try {
       final postData = {
@@ -192,6 +174,7 @@ class FirebasePostRepository {
         'updatedAt': FieldValue.serverTimestamp(),
         'likes': post.likes,
         'comments': post.comments,
+        'likedBy': post.likedBy, // ✅ NOVO: Inclui lista de curtidas
       };
 
       await _firebaseService.postsCollection
@@ -207,65 +190,103 @@ class FirebasePostRepository {
     }
   }
 
-  // Deletar post
-  Future<void> deletePost(String postId) async {
+  // ✅ NOVO: Curtir/Descurtir post (toggle)
+  Future<void> toggleLike(String postId, String userId) async {
     try {
-      // Primeiro deleta a imagem do storage se existir
-      await _deletePostImage(postId);
+      if (kDebugMode) {
+        print('❤️ Toggle like: post=$postId, user=$userId');
+      }
       
-      // Depois deleta o post do firestore
-      await _firebaseService.postsCollection.doc(postId).delete();
+      // Primeiro obtém o post atual para verificar estado
+      final post = await getPostById(postId);
       
-      // Opcional: deletar comentários relacionados
-      await _deletePostComments(postId);
+      if (post != null) {
+        final alreadyLiked = post.likedBy.contains(userId);
+        
+        if (alreadyLiked) {
+          // ✅ Descurtir: remove da lista e decrementa contador
+          await _firebaseService.postsCollection.doc(postId).update({
+            'likes': FieldValue.increment(-1),
+            'likedBy': FieldValue.arrayRemove([userId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          if (kDebugMode) print('💔 Like removido');
+        } else {
+          // ✅ Curtir: adiciona na lista e incrementa contador
+          await _firebaseService.postsCollection.doc(postId).update({
+            'likes': FieldValue.increment(1),
+            'likedBy': FieldValue.arrayUnion([userId]),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+          if (kDebugMode) print('💖 Like adicionado');
+        }
+      }
     } catch (e) {
       if (kDebugMode) {
-        print('❌ ERRO em deletePost: $e');
+        print('❌ ERRO em toggleLike: $e');
       }
       rethrow;
     }
   }
 
-  // Curtir post
-  Future<void> likePost(String postId, String userId) async {
+  // ✅ NOVO: Obter posts curtidos por um usuário específico
+  Future<List<Post>> getPostsLikedByUser(String userId) async {
     try {
-      await _firebaseService.postsCollection.doc(postId).update({
-        'likes': FieldValue.increment(1),
-        'likedBy': FieldValue.arrayUnion([userId]),
-      });
+      if (kDebugMode) {
+        print('🔍 Buscando posts curtidos por: $userId');
+      }
+      
+      final snapshot = await _firebaseService.postsCollection
+          .where('likedBy', arrayContains: userId)
+          .orderBy('createdAt', descending: true)
+          .get();
+      
+      if (kDebugMode) {
+        print('✅ Posts curtidos: ${snapshot.docs.length} encontrados');
+      }
+      
+      return snapshot.docs
+          .map((doc) => _convertDocumentToPost(doc, currentUserId: userId))
+          .toList();
     } catch (e) {
       if (kDebugMode) {
-        print('❌ ERRO em likePost: $e');
+        print('❌ ERRO em getPostsLikedByUser: $e');
       }
       rethrow;
     }
   }
 
-  // Adicionar comentário
-  Future<void> addComment(String postId, String userId, String comment) async {
+  // ✅ NOVO: Verificar se usuário curtiu um post
+  Future<bool> hasUserLikedPost(String postId, String userId) async {
     try {
-      final commentData = {
-        'postId': postId,
-        'userId': userId,
-        'comment': comment,
-        'createdAt': Timestamp.now(),
-      };
-      
-      await _firebaseService.commentsCollection.add(commentData);
-      
-      // Incrementa contador de comentários no post
-      await _firebaseService.postsCollection.doc(postId).update({
-        'comments': FieldValue.increment(1),
-      });
+      final post = await getPostById(postId);
+      return post?.likedBy.contains(userId) ?? false;
     } catch (e) {
       if (kDebugMode) {
-        print('❌ ERRO em addComment: $e');
+        print('⚠️ ERRO em hasUserLikedPost: $e');
       }
-      rethrow;
+      return false;
     }
   }
 
-  // ✅ MELHORADO: Upload de imagem para Firebase Storage
+  // ✅ NOVO: Obter contagem de curtidas de um usuário
+  Future<int?> getUserLikeCount(String userId) async {
+    try {
+      final snapshot = await _firebaseService.postsCollection
+          .where('likedBy', arrayContains: userId)
+          .count()
+          .get();
+      
+      return snapshot.count;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ ERRO em getUserLikeCount: $e');
+      }
+      return 0;
+    }
+  }
+
+  // ✅ MANTIDO: Upload de imagem
   Future<String> _uploadImage(String imagePath, String postId) async {
     if (kDebugMode) {
       print('🎯 REPOSITORY: Iniciando _uploadImage');
@@ -273,7 +294,6 @@ class FirebasePostRepository {
     }
     
     try {
-      // Gera um nome único para a imagem
       final fileName = 'post_${postId}_${DateTime.now().millisecondsSinceEpoch}.jpg';
       if (kDebugMode) print('📁 File name: $fileName');
       
@@ -285,8 +305,6 @@ class FirebasePostRepository {
       UploadTask uploadTask;
       
       if (imagePath.startsWith('data:image')) {
-        // Data URL (Web) - converte para bytes
-        if (kDebugMode) print('🌐 Convertendo Data URL para bytes...');
         final base64String = imagePath.split(',').last;
         final bytes = base64.decode(base64String);
         
@@ -295,14 +313,9 @@ class FirebasePostRepository {
           SettableMetadata(contentType: 'image/jpeg'),
         );
       } else if (imagePath.startsWith('http')) {
-        // Já é uma URL - retorna direto
-        if (kDebugMode) print('🌐 Já é URL HTTP, retornando...');
         return imagePath;
       } else {
-        // File path (Mobile)
-        if (kDebugMode) print('📱 Lendo arquivo do sistema...');
         final file = File(imagePath);
-        
         uploadTask = storageRef.putFile(
           file,
           SettableMetadata(contentType: 'image/jpeg'),
@@ -314,7 +327,7 @@ class FirebasePostRepository {
       if (kDebugMode) print('✅ Upload completo!');
       
       final downloadUrl = await snapshot.ref.getDownloadURL();
-      final cleanedUrl = _cleanFirebaseUrl(downloadUrl); // ← Limpa a URL
+      final cleanedUrl = _cleanFirebaseUrl(downloadUrl);
       
       if (kDebugMode) {
         print('🔗 Download URL (limpa): ${cleanedUrl.substring(0, 80)}...');
@@ -330,16 +343,84 @@ class FirebasePostRepository {
     }
   }
 
-  // ✅ NOVO: Método para limpar URL do Firebase
+  // ✅ MANTIDO: Limpar URL do Firebase
   String _cleanFirebaseUrl(String url) {
-    // Remove quebras de linha e espaços
     return url.replaceAll('\n', '').replaceAll('\r', '').trim();
   }
 
-  // Deletar imagem do Storage
+  // ✅ MANTIDO: Obter post por ID (agora com likedBy)
+  Future<Post?> getPostById(String postId) async {
+    try {
+      final doc = await _firebaseService.postsCollection.doc(postId).get();
+      if (doc.exists) {
+        return _convertDocumentToPost(doc);
+      }
+      return null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ ERRO em getPostById: $e');
+      }
+      rethrow;
+    }
+  }
+
+  // ✅ MANTIDO: Obter último documento para paginação
+  Future<DocumentSnapshot?> getLastDocumentSnapshot() async {
+    try {
+      final snapshot = await _firebaseService.postsCollection
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+      
+      return snapshot.docs.isNotEmpty ? snapshot.docs.first : null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ ERRO em getLastDocumentSnapshot: $e');
+      }
+      return null;
+    }
+  }
+
+  // ✅ MANTIDO: Deletar post
+  Future<void> deletePost(String postId) async {
+    try {
+      await _deletePostImage(postId);
+      await _firebaseService.postsCollection.doc(postId).delete();
+      await _deletePostComments(postId);
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ ERRO em deletePost: $e');
+      }
+      rethrow;
+    }
+  }
+
+  // ✅ MANTIDO: Adicionar comentário
+  Future<void> addComment(String postId, String userId, String comment) async {
+    try {
+      final commentData = {
+        'postId': postId,
+        'userId': userId,
+        'comment': comment,
+        'createdAt': Timestamp.now(),
+      };
+      
+      await _firebaseService.commentsCollection.add(commentData);
+      
+      await _firebaseService.postsCollection.doc(postId).update({
+        'comments': FieldValue.increment(1),
+      });
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ ERRO em addComment: $e');
+      }
+      rethrow;
+    }
+  }
+
+  // ✅ MANTIDO: Deletar imagem do Storage
   Future<void> _deletePostImage(String postId) async {
     try {
-      // Busca referência da imagem
       final listResult = await _firebaseService.storage
           .ref()
           .child('posts')
@@ -352,14 +433,13 @@ class FirebasePostRepository {
         }
       }
     } catch (e) {
-      // Não lança erro - pode não ter imagem
       if (kDebugMode) {
         print('⚠️ Erro ao deletar imagem (pode não existir): $e');
       }
     }
   }
 
-  // Deletar comentários do post
+  // ✅ MANTIDO: Deletar comentários
   Future<void> _deletePostComments(String postId) async {
     try {
       final query = await _firebaseService.commentsCollection
@@ -374,14 +454,13 @@ class FirebasePostRepository {
       
       await batch.commit();
     } catch (e) {
-      // Não lança erro - comentários são opcionais
       if (kDebugMode) {
         print('⚠️ Erro ao deletar comentários: $e');
       }
     }
   }
 
-  // ✅ NOVO: Método para contar total de posts (opcional)
+  // ✅ MANTIDO: Contar total de posts
   Future<int?> getTotalPostsCount() async {
     try {
       final snapshot = await _firebaseService.postsCollection.count().get();
