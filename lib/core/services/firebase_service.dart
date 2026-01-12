@@ -1,4 +1,3 @@
-import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -28,7 +27,7 @@ class FirebaseService {
     try {
       if (kIsWeb) {
         await Firebase.initializeApp(
-          options: FirebaseOptions(
+          options:  FirebaseOptions(
             apiKey: FirebaseConfig.webConfig['apiKey']!,
             authDomain: FirebaseConfig.webConfig['authDomain']!,
             projectId: FirebaseConfig.webConfig['projectId']!,
@@ -66,11 +65,23 @@ class FirebaseService {
   bool get isInitialized => _initialized;
   User? get currentUser => _auth.currentUser;
   
-  // Coleções do Firestore
-  CollectionReference get usersCollection => _firestore.collection('users');
-  CollectionReference get postsCollection => _firestore.collection('posts');
-  CollectionReference get commentsCollection => _firestore.collection('comments');
+  CollectionReference<Map<String, dynamic>> get usersCollection => 
+      _firestore.collection('users').withConverter<Map<String, dynamic>>(
+        fromFirestore: (snapshot, _) => snapshot.data()!,
+        toFirestore: (value, _) => value,
+      );
   
-  // Referência do Storage
+  CollectionReference<Map<String, dynamic>> get postsCollection => 
+      _firestore.collection('posts').withConverter<Map<String, dynamic>>(
+        fromFirestore: (snapshot, _) => snapshot.data()!,
+        toFirestore: (value, _) => value,
+      );
+  
+  CollectionReference<Map<String, dynamic>> get commentsCollection => 
+      _firestore.collection('comments').withConverter<Map<String, dynamic>>(
+        fromFirestore: (snapshot, _) => snapshot.data()!,
+        toFirestore: (value, _) => value,
+      );
+  
   Reference get storageRef => _storage.ref();
 }
