@@ -132,5 +132,5 @@ abstract class _AuthStoreBase with Store {
   bool get canLogin => username.isNotEmpty;
   
   @computed
-  String get greeting => isLoggedIn ? 'Olá, $username!' : 'Faça login';
+  String get greeting => isLoggedIn ? 'Olá, $username!' : 'Social Feed';
 }
