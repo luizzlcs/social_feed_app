@@ -13,7 +13,6 @@ class FirebasePostRepository {
   FirebasePostRepository(this._firebaseService);
 
   // ✅ CORRIGIDO: Stream de posts
-  // Stream de posts em tempo real
   Stream<List<Post>> getPostsStream() {
     return _firebaseService.postsCollection
         .orderBy('createdAt', descending: true)
@@ -25,18 +24,31 @@ class FirebasePostRepository {
         });
   }
 
-  // Buscar posts paginados
-  Future<List<Post>> getPosts({int limit = 20, DocumentSnapshot? lastDoc}) async {
+  // ✅ MELHORADO: Buscar posts paginados com suporte a DocumentSnapshot
+  Future<List<Post>> getPosts({
+    int limit = 10,
+    DocumentSnapshot? lastDocument, // ← DocumentSnapshot em vez de Post
+  }) async {
     try {
+      if (kDebugMode) {
+        print('📄 getPosts: limit=$limit, lastDocument=${lastDocument?.id ?? "null"}');
+      }
+      
       var query = _firebaseService.postsCollection
           .orderBy('createdAt', descending: true)
           .limit(limit);
 
-      if (lastDoc != null) {
-        query = query.startAfterDocument(lastDoc);
+      // Se tem último documento para paginação
+      if (lastDocument != null) {
+        query = query.startAfterDocument(lastDocument);
       }
 
       final snapshot = await query.get();
+      
+      if (kDebugMode) {
+        print('✅ getPosts: ${snapshot.docs.length} documentos encontrados');
+      }
+      
       return snapshot.docs
           .map((doc) => _convertDocumentToPost(doc))
           .toList();
@@ -48,25 +60,49 @@ class FirebasePostRepository {
     }
   }
 
-  // Método para converter documento em Post
+  // ✅ MELHORADO: Método para converter documento em Post
   Post _convertDocumentToPost(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>? ?? {};
-    
-    // Converte Timestamp para DateTime
-    Timestamp? createdAt = data['createdAt'];
-    Timestamp? updatedAt = data['updatedAt'];
-    
-    return Post(
-      id: doc.id,
-      userId: data['userId']?.toString() ?? '',
-      username: data['username']?.toString() ?? 'Usuário',
-      content: data['content']?.toString() ?? '',
-      imageUrl: data['imageUrl']?.toString(),
-      createdAt: createdAt?.toDate() ?? DateTime.now(),
-      updatedAt: updatedAt?.toDate() ?? DateTime.now(),
-      likes: (data['likes'] ?? 0).toInt(),
-      comments: (data['comments'] ?? 0).toInt(),
-    );
+    try {
+      final data = doc.data() as Map<String, dynamic>? ?? {};
+      
+      // Converte Timestamp para DateTime
+      Timestamp? createdAt = data['createdAt'];
+      Timestamp? updatedAt = data['updatedAt'];
+      
+      return Post(
+        id: doc.id,
+        userId: data['userId']?.toString() ?? '',
+        username: data['username']?.toString() ?? 'Usuário',
+        content: data['content']?.toString() ?? '',
+        imageUrl: data['imageUrl']?.toString(),
+        createdAt: createdAt?.toDate() ?? DateTime.now(),
+        updatedAt: updatedAt?.toDate() ?? DateTime.now(),
+        likes: (data['likes'] ?? 0).toInt(),
+        comments: (data['comments'] ?? 0).toInt(),
+      );
+    } catch (e) {
+      if (kDebugMode) {
+        print('❌ ERRO em _convertDocumentToPost: $e');
+      }
+      rethrow;
+    }
+  }
+
+  // ✅ NOVO: Método para obter último documento para paginação
+  Future<DocumentSnapshot?> getLastDocumentSnapshot() async {
+    try {
+      final snapshot = await _firebaseService.postsCollection
+          .orderBy('createdAt', descending: true)
+          .limit(1)
+          .get();
+      
+      return snapshot.docs.isNotEmpty ? snapshot.docs.first : null;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ ERRO em getLastDocumentSnapshot: $e');
+      }
+      return null;
+    }
   }
 
   // Buscar post por ID
@@ -103,7 +139,7 @@ class FirebasePostRepository {
       if (imagePath != null && imagePath.isNotEmpty) {
         if (kDebugMode) print('🖼️ Fazendo upload da imagem...');
         imageUrl = await _uploadImage(imagePath, post.id);
-        if (kDebugMode) print('✅ Imagem upload: $imageUrl');
+        if (kDebugMode) print('✅ Imagem upload: ${imageUrl?.substring(0, 80)}...');
       }
 
       // Usar FieldValue.serverTimestamp()
@@ -133,17 +169,6 @@ class FirebasePostRepository {
       await _firebaseService.postsCollection.doc(post.id).set(postData);
       
       if (kDebugMode) print('✅ Post salvo no Firestore!');
-      
-      // Verificar se foi salvo
-      final savedDoc = await _firebaseService.postsCollection.doc(post.id).get();
-      if (savedDoc.exists) {
-        if (kDebugMode) {
-          print('✅✅✅ POST SALVO E CONFIRMADO!');
-          print('📄 Dados salvos: ${savedDoc.data()}');
-        }
-      } else {
-        if (kDebugMode) print('❌ POST NÃO ENCONTRADO APÓS SALVAR!');
-      }
       
       // Retorna o post com a URL da imagem
       return post.copyWith(imageUrl: imageUrl);
@@ -240,12 +265,11 @@ class FirebasePostRepository {
     }
   }
 
-  // Upload de imagem para Firebase Storage
+  // ✅ MELHORADO: Upload de imagem para Firebase Storage
   Future<String> _uploadImage(String imagePath, String postId) async {
     if (kDebugMode) {
       print('🎯 REPOSITORY: Iniciando _uploadImage');
       print('📁 Post ID: $postId');
-      print('📍 Image path type: ${imagePath.startsWith('data:image') ? 'Data URL' : 'File path'}');
     }
     
     try {
@@ -258,8 +282,6 @@ class FirebasePostRepository {
           .child('posts')
           .child(fileName);
       
-      if (kDebugMode) print('📍 Storage path: ${storageRef.fullPath}');
-      
       UploadTask uploadTask;
       
       if (imagePath.startsWith('data:image')) {
@@ -267,7 +289,6 @@ class FirebasePostRepository {
         if (kDebugMode) print('🌐 Convertendo Data URL para bytes...');
         final base64String = imagePath.split(',').last;
         final bytes = base64.decode(base64String);
-        if (kDebugMode) print('📊 Bytes length: ${bytes.length}');
         
         uploadTask = storageRef.putData(
           bytes,
@@ -281,8 +302,6 @@ class FirebasePostRepository {
         // File path (Mobile)
         if (kDebugMode) print('📱 Lendo arquivo do sistema...');
         final file = File(imagePath);
-        if (kDebugMode) print('📊 File exists: ${file.existsSync()}');
-        if (kDebugMode) print('📊 File size: ${file.lengthSync()} bytes');
         
         uploadTask = storageRef.putFile(
           file,
@@ -292,12 +311,16 @@ class FirebasePostRepository {
       
       if (kDebugMode) print('⏳ Aguardando upload...');
       final snapshot = await uploadTask;
-      if (kDebugMode) print('✅ Upload completo! Bytes: ${snapshot.bytesTransferred}');
+      if (kDebugMode) print('✅ Upload completo!');
       
       final downloadUrl = await snapshot.ref.getDownloadURL();
-      if (kDebugMode) print('🔗 Download URL obtida: $downloadUrl');
+      final cleanedUrl = _cleanFirebaseUrl(downloadUrl); // ← Limpa a URL
       
-      return downloadUrl;
+      if (kDebugMode) {
+        print('🔗 Download URL (limpa): ${cleanedUrl.substring(0, 80)}...');
+      }
+      
+      return cleanedUrl;
     } catch (e, stackTrace) {
       if (kDebugMode) {
         print('❌❌❌ ERRO em _uploadImage: $e');
@@ -305,6 +328,12 @@ class FirebasePostRepository {
       }
       rethrow;
     }
+  }
+
+  // ✅ NOVO: Método para limpar URL do Firebase
+  String _cleanFirebaseUrl(String url) {
+    // Remove quebras de linha e espaços
+    return url.replaceAll('\n', '').replaceAll('\r', '').trim();
   }
 
   // Deletar imagem do Storage
@@ -349,6 +378,19 @@ class FirebasePostRepository {
       if (kDebugMode) {
         print('⚠️ Erro ao deletar comentários: $e');
       }
+    }
+  }
+
+  // ✅ NOVO: Método para contar total de posts (opcional)
+  Future<int?> getTotalPostsCount() async {
+    try {
+      final snapshot = await _firebaseService.postsCollection.count().get();
+      return snapshot.count;
+    } catch (e) {
+      if (kDebugMode) {
+        print('⚠️ ERRO em getTotalPostsCount: $e');
+      }
+      return 0;
     }
   }
 }

@@ -11,11 +11,28 @@ class PostStore = _PostStoreBase with _$PostStore;
 
 abstract class _PostStoreBase with Store {
   final FirebasePostRepository _repository;
+  final FirebaseService _firebaseService;
   
-  _PostStoreBase() : _repository = FirebasePostRepository(getIt<FirebaseService>());
+  DocumentSnapshot? _lastDocument; // ← Movido para cá (era variável solta)
 
+  _PostStoreBase() 
+    : _repository = FirebasePostRepository(getIt<FirebaseService>()),
+      _firebaseService = getIt<FirebaseService>();
+
+  // Observable: Posts carregados do Firebase
   @observable
   ObservableList<Post> posts = ObservableList<Post>();
+
+  // Observable: Posts otimistas (criados localmente antes de sincronizar)
+  @observable
+  ObservableList<Post> optimisticPosts = ObservableList<Post>();
+
+  // Observable: IDs de posts sendo processados
+  @observable
+  ObservableSet<String> processingPostIds = ObservableSet<String>();
+
+  @observable
+  bool isLoadingMore = false;
 
   @observable
   bool isLoading = false;
@@ -29,50 +46,91 @@ abstract class _PostStoreBase with Store {
   @observable
   bool hasMorePosts = true;
 
-  DocumentSnapshot<Map<String, dynamic>>? _lastDocument;
+  // ============ COMPUTED PROPERTIES ============
 
-  // Action para carregar posts do Firebase
+  // Computed: Lista combinada de todos os posts
+  @computed
+  List<Post> get allPosts {
+    final combined = <Post>[...posts, ...optimisticPosts];
+    combined.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+    
+    final seenIds = <String>{};
+    return combined.where((post) => seenIds.add(post.id)).toList();
+  }
+
+  // Computed: Posts que estão sendo processados
+  @computed
+  List<Post> get processingPosts => 
+      optimisticPosts.where((post) => processingPostIds.contains(post.id)).toList();
+
+  // Computed: Posts ordenados (igual a allPosts)
+  @computed
+  List<Post> get sortedPosts => allPosts;
+
+  // Computed: Total de posts
+  @computed
+  int get totalPosts => allPosts.length;
+
+  // Computed: Total de curtidas
+  @computed
+  int get totalLikes => allPosts.fold(0, (sum, post) => sum + post.likes);
+
+  // ============ MÉTODOS PÚBLICOS ============
+
+  /// Carrega posts do Firebase
   @action
   Future<void> loadPosts() async {
     isLoading = true;
     errorMessage = null;
+    _lastDocument = null; // Reset na primeira carga
 
     try {
       final loadedPosts = await _repository.getPosts(limit: 10);
       
+      // Remove posts otimistas que já foram sincronizados
+      _removeSyncedOptimisticPosts(loadedPosts);
+
       posts.clear();
       posts.addAll(loadedPosts);
       
-      // Atualiza o último documento para paginação
+      // Salva último documento para paginação
       if (loadedPosts.isNotEmpty) {
+        final lastDoc = await _getLastDocumentSnapshot();
+        _lastDocument = lastDoc;
         hasMorePosts = loadedPosts.length == 10;
       } else {
         hasMorePosts = false;
       }
     } catch (e) {
       errorMessage = 'Erro ao carregar posts: $e';
-      // Fallback para dados mock se Firebase falhar
-      _loadMockPosts();
     } finally {
       isLoading = false;
     }
   }
 
-  // Action para carregar mais posts (pagination)
+  /// Carrega mais posts (pagination)
   @action
   Future<void> loadMorePosts() async {
-    if (isLoading || !hasMorePosts) return;
-
-    isLoading = true;
+    if (isLoading || isLoadingMore || !hasMorePosts) return;
+    
+    isLoadingMore = true;
+    errorMessage = null;
 
     try {
       final loadedPosts = await _repository.getPosts(
         limit: 10,
-        lastDoc: _lastDocument,
+        lastDocument: _lastDocument,
       );
       
       if (loadedPosts.isNotEmpty) {
         posts.addAll(loadedPosts);
+        
+        // Atualiza último documento
+        if (loadedPosts.isNotEmpty) {
+          final lastDoc = await _getLastDocumentSnapshot();
+          _lastDocument = lastDoc;
+        }
+        
         hasMorePosts = loadedPosts.length == 10;
       } else {
         hasMorePosts = false;
@@ -80,188 +138,336 @@ abstract class _PostStoreBase with Store {
     } catch (e) {
       errorMessage = 'Erro ao carregar mais posts: $e';
     } finally {
-      isLoading = false;
+      isLoadingMore = false;
     }
   }
 
-  // Action para criar post com imagem
+  /// Atualiza lista de posts
   @action
-  Future<void> createPostWithImage(String content, String? imagePath) async {
+  Future<void> refreshPosts() async {
     isLoading = true;
-    errorMessage = null;
+    _lastDocument = null;
+    await loadPosts();
+  }
 
+  /// Cria um novo post (com ou sem imagem)
+  @action
+  Future<void> createPost(String content, {String? imagePath}) async {
     try {
-      final newPost = Post(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        userId: 'current_user_id', // Depois vamos pegar do Firebase Auth
-        username: 'Você', // Depois vamos pegar do usuário logado
-        content: content,
-        createdAt: DateTime.now(),
-        // updatedAt: DateTime.now(),
-        likes: 0,
-        comments: 0,
-        imageUrl: null, // Será preenchido pelo repository
-        updatedAt: DateTime.now()
-      );
+      // 1. Cria post otimista
+      final optimisticPost = _createOptimisticPost(content, imagePath);
+      optimisticPosts.insert(0, optimisticPost);
+      processingPostIds.add(optimisticPost.id);
 
-      final createdPost = await _repository.createPost(newPost, imagePath: imagePath);
+      // 2. Salva no Firebase em background
+      _savePostInBackground(optimisticPost, imagePath);
       
-      // Adiciona no início da lista
-      posts.insert(0, createdPost);
     } catch (e) {
       errorMessage = 'Erro ao criar post: $e';
-    } finally {
-      isLoading = false;
     }
   }
 
-  // Action para criar post sem imagem
-  @action
-  Future<void> createPost(String content) async {
-    await createPostWithImage(content, null);
-  }
-
-  // Action para atualizar post
+  /// Atualiza conteúdo de um post
   @action
   Future<void> updatePost(String postId, String newContent) async {
-    isLoading = true;
-
-    try {
-      final index = posts.indexWhere((post) => post.id == postId);
-      if (index != -1) {
-        final updatedPost = posts[index].copyWith(
-          content: newContent,
-          // updatedAt: DateTime.now(),
-        );
-        
-        await _repository.updatePost(updatedPost);
-        posts[index] = updatedPost;
-      }
-    } catch (e) {
-      errorMessage = 'Erro ao atualizar post: $e';
-    } finally {
-      isLoading = false;
-    }
+    // Atualiza imediatamente na UI
+    _updatePostInList(posts, postId, newContent);
+    _updatePostInList(optimisticPosts, postId, newContent);
+    
+    processingPostIds.add(postId);
+    
+    // Sincroniza com Firebase em background
+    _updatePostInBackground(postId, newContent);
   }
 
-  // Action para deletar post
+  /// Deleta um post
   @action
   Future<void> deletePost(String postId) async {
-    isLoading = true;
-
-    try {
-      await _repository.deletePost(postId);
-      posts.removeWhere((post) => post.id == postId);
-    } catch (e) {
-      errorMessage = 'Erro ao deletar post: $e';
-    } finally {
-      isLoading = false;
-    }
+    // Guarda cópia para possível rollback
+    final postToRestore = _findPostById(postId);
+    
+    // Remove imediatamente da UI
+    posts.removeWhere((post) => post.id == postId);
+    optimisticPosts.removeWhere((post) => post.id == postId);
+    
+    processingPostIds.add(postId);
+    
+    // Deleta no Firebase em background
+    _deletePostInBackground(postId, postToRestore);
   }
 
-  // Action para curtir post
+  /// Adiciona like a um post
   @action
   Future<void> likePost(String postId) async {
-    try {
-      final index = posts.indexWhere((post) => post.id == postId);
-      if (index != -1) {
-        final post = posts[index];
-        final updatedPost = post.copyWith(likes: post.likes + 1);
-        
-        // Atualiza no Firebase (precisa do userId real)
-        // await _repository.likePost(postId, 'current_user_id');
-        
-        posts[index] = updatedPost;
-      }
-    } catch (e) {
-      errorMessage = 'Erro ao curtir post: $e';
-    }
+    // Incrementa imediatamente na UI
+    _incrementLikeInList(posts, postId);
+    _incrementLikeInList(optimisticPosts, postId);
+    
+    // Sincroniza com Firebase em background
+    _likePostInBackground(postId);
   }
 
-  // Action para adicionar comentário
+  /// Adiciona comentário a um post
   @action
   Future<void> addComment(String postId) async {
-    try {
-      final index = posts.indexWhere((post) => post.id == postId);
-      if (index != -1) {
-        final post = posts[index];
-        final updatedPost = post.copyWith(comments: post.comments + 1);
-        
-        posts[index] = updatedPost;
-      }
-    } catch (e) {
-      errorMessage = 'Erro ao adicionar comentário: $e';
-    }
+    // Incrementa imediatamente na UI
+    _incrementCommentInList(posts, postId);
+    _incrementCommentInList(optimisticPosts, postId);
+    
+    // Sincroniza com Firebase em background
+    _addCommentInBackground(postId);
   }
 
-  // Action para selecionar post
+  /// Seleciona um post para visualização/edição
   @action
   void selectPost(Post post) {
     selectedPost = post;
   }
 
-  // Action para limpar seleção
+  /// Limpa seleção atual
   @action
   void clearSelection() {
     selectedPost = null;
   }
 
-  // Computed: posts ordenados por data
-  @computed
-  List<Post> get sortedPosts => posts.toList()
-    ..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  // ============ MÉTODOS PRIVADOS ============
 
-  // Computed: total de posts
-  @computed
-  int get totalPosts => posts.length;
-
-  // Computed: total de curtidas
-  @computed
-  int get totalLikes => posts.fold(0, (sum, post) => sum + post.likes);
-
-  // Método de fallback (mock data)
-  void _loadMockPosts() {
-    final examplePosts = [
-      Post(
-        id: '1',
-        userId: 'user1',
-        username: 'João Silva',
-        content: 'Estou muito feliz com meu novo projeto em Flutter! 🚀',
-        createdAt: DateTime.now().subtract(const Duration(hours: 2)),
-        likes: 15,
-        comments: 3,
-        updatedAt: DateTime.now()
-      ),
-      Post(
-        id: '2',
-        userId: 'user2',
-        username: 'Maria Santos',
-        content: 'Alguém tem dicas de lugares bons para estudar programação online?',
-        createdAt: DateTime.now().subtract(const Duration(hours: 5)),
-        likes: 8,
-        comments: 7,
-        imageUrl: 'https://picsum.photos/400/300?random=1',
-        updatedAt: DateTime.now()
-      ),
-      Post(
-        id: '3',
-        userId: 'user3',
-        username: 'Pedro Costa',
-        content: 'Acabei de terminar meu primeiro app mobile! 😎\n\nFoi uma jornada incrível de aprendizado.',
-        createdAt: DateTime.now().subtract(const Duration(days: 1)),
-        likes: 42,
-        comments: 12,
-        imageUrl: 'https://picsum.photos/400/300?random=1',
-        updatedAt: DateTime.now()
-      ),
-    ];
-
-    posts.clear();
-    posts.addAll(examplePosts);
+  /// Obtém último documento para paginação
+  Future<DocumentSnapshot?> _getLastDocumentSnapshot() async {
+    if (posts.isEmpty) return null;
+    
+    try {
+      final lastPost = posts.last;
+      final doc = await _firebaseService.postsCollection.doc(lastPost.id).get();
+      return doc;
+    } catch (e) {
+      return null;
+    }
   }
 
-  // Stream de posts em tempo real
-  Stream<List<Post>> get postsStream {
-    return _repository.getPostsStream();
+  /// Cria post otimista para feedback imediato
+  Post _createOptimisticPost(String content, String? imagePath) {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    
+    return Post(
+      id: timestamp.toString(),
+      userId: 'current_user', // Será substituído por AuthStore depois
+      username: 'Você',
+      content: content,
+      imageUrl: imagePath,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      likes: 0,
+      comments: 0,
+      isOptimistic: true,
+    );
+  }
+
+  /// Salva post no Firebase em background
+  Future<void> _savePostInBackground(Post optimisticPost, String? imagePath) async {
+    try {
+      // Cria post real (sem flag otimista)
+      final realPost = optimisticPost.copyWith(isOptimistic: false);
+      
+      final savedPost = await _repository.createPost(
+        realPost,
+        imagePath: imagePath,
+      );
+
+      // Atualiza post otimista com dados reais
+      _updateOptimisticPostWithRealData(optimisticPost.id, savedPost);
+      
+    } catch (e) {
+      // Marca como falhado
+      _markOptimisticPostAsFailed(optimisticPost.id, e.toString());
+    } finally {
+      processingPostIds.remove(optimisticPost.id);
+    }
+  }
+
+  /// Atualiza post otimista com dados reais do Firebase
+  @action
+  void _updateOptimisticPostWithRealData(String postId, Post realPost) {
+    final index = optimisticPosts.indexWhere((post) => post.id == postId);
+    
+    if (index != -1) {
+      // Substitui por post real
+      optimisticPosts[index] = realPost;
+      
+      // Adiciona à lista principal se ainda não existir
+      if (!posts.any((post) => post.id == postId)) {
+        posts.insert(0, realPost);
+      }
+    }
+  }
+
+  /// Marca post otimista como falhado
+  @action
+  void _markOptimisticPostAsFailed(String postId, String error) {
+    final index = optimisticPosts.indexWhere((post) => post.id == postId);
+    
+    if (index != -1) {
+      final failedPost = optimisticPosts[index].copyWith(
+        syncFailed: true,
+        syncError: error,
+      );
+      
+      optimisticPosts[index] = failedPost;
+    }
+  }
+
+  /// Remove posts otimistas já sincronizados
+  @action
+  void _removeSyncedOptimisticPosts(List<Post> realPosts) {
+    // Remove pelo ID
+    final realPostIds = realPosts.map((post) => post.id).toSet();
+    optimisticPosts.removeWhere((post) => realPostIds.contains(post.id));
+    
+    // Limpeza: remove posts otimistas antigos (> 5 minutos)
+    final cutoffTime = DateTime.now().subtract(const Duration(minutes: 5));
+    optimisticPosts.removeWhere((post) => 
+      post.isOptimistic && post.createdAt.isBefore(cutoffTime)
+    );
+  }
+
+  // ============ HELPERS PARA ATUALIZAÇÃO DE LISTAS ============
+
+  void _updatePostInList(ObservableList<Post> list, String postId, String newContent) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1) {
+      list[index] = list[index].copyWith(
+        content: newContent,
+        updatedAt: DateTime.now(),
+      );
+    }
+  }
+
+  void _incrementLikeInList(ObservableList<Post> list, String postId) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1) {
+      list[index] = list[index].copyWith(likes: list[index].likes + 1);
+    }
+  }
+
+  void _incrementCommentInList(ObservableList<Post> list, String postId) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1) {
+      list[index] = list[index].copyWith(comments: list[index].comments + 1);
+    }
+  }
+
+  void _decrementLikeInList(ObservableList<Post> list, String postId) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1 && list[index].likes > 0) {
+      list[index] = list[index].copyWith(likes: list[index].likes - 1);
+    }
+  }
+
+  void _decrementCommentInList(ObservableList<Post> list, String postId) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1 && list[index].comments > 0) {
+      list[index] = list[index].copyWith(comments: list[index].comments - 1);
+    }
+  }
+
+  // ============ BACKGROUND SYNC METHODS ============
+
+  Future<void> _updatePostInBackground(String postId, String newContent) async {
+    try {
+      final post = _findPostById(postId);
+      if (post != null) {
+        final updatedPost = post.copyWith(content: newContent);
+        await _repository.updatePost(updatedPost);
+      }
+    } catch (e) {
+      // Marca como falhado
+      _markPostAsFailed(postId, 'Falha ao atualizar: $e');
+    } finally {
+      processingPostIds.remove(postId);
+    }
+  }
+
+  Future<void> _deletePostInBackground(String postId, Post? postToRestore) async {
+    try {
+      await _repository.deletePost(postId);
+    } catch (e) {
+      // Rollback: restaura post se falhar
+      if (postToRestore != null && !_postExists(postId)) {
+        if (postToRestore.isOptimistic) {
+          optimisticPosts.add(postToRestore);
+        } else {
+          posts.add(postToRestore);
+        }
+      }
+    } finally {
+      processingPostIds.remove(postId);
+    }
+  }
+
+  Future<void> _likePostInBackground(String postId) async {
+    try {
+      // TODO: Obter userId real do AuthStore
+      const userId = 'current_user';
+      await _repository.likePost(postId, userId);
+    } catch (e) {
+      // Reverte like local
+      _decrementLikeInList(posts, postId);
+      _decrementLikeInList(optimisticPosts, postId);
+    }
+  }
+
+  Future<void> _addCommentInBackground(String postId) async {
+    try {
+      // TODO: Obter userId real e comentário do usuário
+      const userId = 'current_user';
+      const comment = 'Novo comentário';
+      await _repository.addComment(postId, userId, comment);
+    } catch (e) {
+      // Reverte contador local
+      _decrementCommentInList(posts, postId);
+      _decrementCommentInList(optimisticPosts, postId);
+    }
+  }
+
+  // ============ HELPERS ============
+
+  Post? _findPostById(String postId) {
+    try {
+      final post = posts.firstWhere(
+        (post) => post.id == postId,
+        orElse: () => throw Exception('Post não encontrado em posts'),
+      );
+      return post;
+    } catch (_) {
+      try {
+        final post = optimisticPosts.firstWhere(
+          (post) => post.id == postId,
+          orElse: () => throw Exception('Post não encontrado em optimisticPosts'),
+        );
+        return post;
+      } catch (_) {
+        return null;
+      }
+    }
+  }
+
+  bool _postExists(String postId) {
+    return posts.any((post) => post.id == postId) ||
+           optimisticPosts.any((post) => post.id == postId);
+  }
+
+  void _markPostAsFailed(String postId, String error) {
+    _updatePostSyncStatus(posts, postId, error);
+    _updatePostSyncStatus(optimisticPosts, postId, error);
+  }
+
+  void _updatePostSyncStatus(ObservableList<Post> list, String postId, String error) {
+    final index = list.indexWhere((post) => post.id == postId);
+    if (index != -1) {
+      list[index] = list[index].copyWith(
+        syncFailed: true,
+        syncError: error,
+      );
+    }
   }
 }

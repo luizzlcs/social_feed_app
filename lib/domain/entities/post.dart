@@ -1,5 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
 class Post {
   final String id;
   final String userId;
@@ -10,6 +8,11 @@ class Post {
   final int likes;
   final int comments;
   final String? imageUrl;
+  
+  // ✅ NOVO: Flags para UI otimista
+  final bool isOptimistic;
+  final bool syncFailed;
+  final String? syncError;
 
   const Post({
     required this.id,
@@ -21,18 +24,24 @@ class Post {
     this.likes = 0,
     this.comments = 0,
     this.imageUrl,
+    this.isOptimistic = false, // ✅ NOVO
+    this.syncFailed = false,    // ✅ NOVO
+    this.syncError,             // ✅ NOVO
   });
 
-  // Método para criar cópia com alterações (útil para edição)
   Post copyWith({
     String? id,
     String? userId,
     String? username,
     String? content,
     DateTime? createdAt,
+    DateTime? updatedAt,
     int? likes,
     int? comments,
     String? imageUrl,
+    bool? isOptimistic, // ✅ NOVO
+    bool? syncFailed,    // ✅ NOVO
+    String? syncError,   // ✅ NOVO
   }) {
     return Post(
       id: id ?? this.id,
@@ -44,6 +53,9 @@ class Post {
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
       imageUrl: imageUrl ?? this.imageUrl,
+      isOptimistic: isOptimistic ?? this.isOptimistic, // ✅ NOVO
+      syncFailed: syncFailed ?? this.syncFailed,        // ✅ NOVO
+      syncError: syncError ?? this.syncError,           // ✅ NOVO
     );
   }
 }
