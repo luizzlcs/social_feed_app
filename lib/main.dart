@@ -6,11 +6,15 @@ import 'package:social_feed_app/presentation/pages/feed/feed_page.dart';
 import 'package:social_feed_app/presentation/pages/login/login_page.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
 
-void main() {
-  // 1. Configurar as dependências
-  setupDependencies();
+void main() async {
   
-  // 2. Iniciar o app
+  debugPrint('🚀 Aplicação iniciando...');
+  
+  WidgetsFlutterBinding.ensureInitialized();
+  
+
+  await setupDependencies();
+  
   runApp(const MyApp());
 }
 
@@ -33,13 +37,12 @@ class AppWrapper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Obtém a instância do AuthStore via GetIt
-    final authStore = getIt<AuthStore>();
     
+    final authStore = getIt<AuthStore>();
+
     return Observer(
       builder: (_) {
         if (authStore.isLoggedIn) {
-          
           return FeedPage(username: authStore.username);
         } else {
           return const LoginPage();
