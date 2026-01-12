@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 
 class PostModel {
@@ -6,6 +7,7 @@ class PostModel {
   final String username;
   final String content;
   final DateTime createdAt;
+  final DateTime updatedAt;
   final int likes;
   final int comments;
   final String? imageUrl;
@@ -16,6 +18,7 @@ class PostModel {
     required this.username,
     required this.content,
     required this.createdAt,
+    required this.updatedAt,
     this.likes = 0,
     this.comments = 0,
     this.imageUrl,
@@ -29,6 +32,7 @@ class PostModel {
       username: username,
       content: content,
       createdAt: createdAt,
+      updatedAt: updatedAt,
       likes: likes,
       comments: comments,
       imageUrl: imageUrl,
@@ -43,6 +47,7 @@ class PostModel {
       username: post.username,
       content: post.content,
       createdAt: post.createdAt,
+      updatedAt: post.updatedAt,
       likes: post.likes,
       comments: post.comments,
       imageUrl: post.imageUrl,
@@ -57,6 +62,7 @@ class PostModel {
       username: json['username'] ?? 'Usuário',
       content: json['content'] ?? '',
       createdAt: DateTime.parse(json['createdAt'] ?? DateTime.now().toString()),
+      updatedAt: DateTime.parse(json['updatedAt'] ?? DateTime.now().toString()),
       likes: json['likes'] ?? 0,
       comments: json['comments'] ?? 0,
       imageUrl: json['imageUrl'],
