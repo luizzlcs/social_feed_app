@@ -16,11 +16,12 @@ class _LoginPageState extends State<LoginPage> {
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   
-  // Obtém a instância do AuthStore
-  final AuthStore _authStore = getIt<AuthStore>();
-
+  
   @override
   Widget build(BuildContext context) {
+
+    final authStore = getIt<AuthStore>();
+    
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(20.0),
@@ -32,11 +33,10 @@ class _LoginPageState extends State<LoginPage> {
                 const FlutterLogo(size: 100),
                 const SizedBox(height: 30),
                 
-                // Usando Observer para reagir a mudanças no store
                 Observer(
                   builder: (_) {
                     return Text(
-                      _authStore.greeting,
+                      authStore.greeting,
                       style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -89,14 +89,14 @@ class _LoginPageState extends State<LoginPage> {
                         },
                       ),
                       
-                      // Exibir mensagem de erro do store
+                   
                       Observer(
                         builder: (_) {
-                          if (_authStore.errorMessage != null) {
+                          if (authStore.errorMessage != null) {
                             return Padding(
                               padding: const EdgeInsets.only(top: 16),
                               child: Text(
-                                _authStore.errorMessage!,
+                                authStore.errorMessage!,
                                 style: TextStyle(
                                   color: Theme.of(context).colorScheme.error,
                                 ),
@@ -109,20 +109,19 @@ class _LoginPageState extends State<LoginPage> {
                       
                       const SizedBox(height: 30),
                       
-                      // Botão de login usando Observer
                       Observer(
                         builder: (_) {
                           return CustomButton(
                             text: 'Entrar',
                             onPressed: () async {
                               if (_formKey.currentState!.validate()) {
-                                await _authStore.login(
+                                await authStore.login(
                                   _usernameController.text,
                                   _passwordController.text,
                                 );
                               }
                             },
-                            isLoading: _authStore.isLoading,
+                            isLoading: authStore.isLoading,
                           );
                         },
                       ),
