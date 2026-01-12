@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 import 'package:get_it/get_it.dart';
 import 'package:social_feed_app/core/services/camera_service.dart';
 import 'package:social_feed_app/core/services/firebase_service.dart';
+import 'package:social_feed_app/presentation/pages/login/widgets/login_controller.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
 import 'package:social_feed_app/presentation/stores/post_store.dart';
 
@@ -27,6 +28,10 @@ Future<void> setupDependencies() async {
   
   getIt.registerSingleton<PostStore>(PostStore());
   getIt.registerSingleton<CameraService>(CameraService());
+
+   // Registra LoginController como factory
+  getIt.registerFactory<LoginController>(() => LoginController());
+  
   
   _dependenciesInitialized = true;
   debugPrint('🎉 Dependências inicializadas com sucesso!');
