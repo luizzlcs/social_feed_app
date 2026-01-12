@@ -66,7 +66,6 @@ class LoginController {
     passwordController.dispose();
   }
 
-  // Métodos privados
   void _showSuccessSnackbar(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(

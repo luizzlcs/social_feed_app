@@ -19,7 +19,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   void initState() {
     super.initState();
-    // ✅ Agora seguro porque GetIt já foi inicializado
     _controller = getIt<LoginController>();
 
   }
