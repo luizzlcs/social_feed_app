@@ -27,19 +27,18 @@ class Post {
     this.likes = 0,
     this.comments = 0,
     this.imageUrl,
-    this.likedBy = const [], // ✅ NOVO: Lista vazia por padrão
+    this.likedBy = const [],
     this.isOptimistic = false,
     this.syncFailed = false,
     this.syncError,
   });
 
-  // ✅ NOVO: Método auxiliar para verificar se usuário curtiu
+  // Método auxiliar para verificar se usuário curtiu
   bool isLikedBy(String userId) => likedBy.contains(userId);
 
-  // ✅ NOVO: Método auxiliar para verificar se está curtido (mais legível)
+  // Método auxiliar para verificar se está curtido (mais legível)
   bool get hasLikes => likes > 0;
 
-  // ✅ NOVO: Método auxiliar para contagem de curtidas formatada
   String get formattedLikes {
     if (likes >= 1000000) {
       return '${(likes / 1000000).toStringAsFixed(1)}M';
@@ -59,7 +58,7 @@ class Post {
     int? likes,
     int? comments,
     String? imageUrl,
-    List<String>? likedBy, // ✅ NOVO: Adicionado
+    List<String>? likedBy, 
     bool? isOptimistic,
     bool? syncFailed,
     String? syncError,
@@ -74,14 +73,13 @@ class Post {
       likes: likes ?? this.likes,
       comments: comments ?? this.comments,
       imageUrl: imageUrl ?? this.imageUrl,
-      likedBy: likedBy ?? this.likedBy, // ✅ NOVO: Adicionado
+      likedBy: likedBy ?? this.likedBy, 
       isOptimistic: isOptimistic ?? this.isOptimistic,
       syncFailed: syncFailed ?? this.syncFailed,
       syncError: syncError ?? this.syncError,
     );
   }
 
-  // ✅ NOVO: Método para adicionar curtida
   Post withLikeAdded(String userId) {
     final newLikedBy = List<String>.from(likedBy);
     if (!newLikedBy.contains(userId)) {
@@ -95,7 +93,6 @@ class Post {
     );
   }
 
-  // ✅ NOVO: Método para remover curtida
   Post withLikeRemoved(String userId) {
     final newLikedBy = List<String>.from(likedBy);
     newLikedBy.remove(userId);
@@ -107,7 +104,6 @@ class Post {
     );
   }
 
-  // ✅ NOVO: Método para alternar curtida
   Post withLikeToggled(String userId) {
     if (likedBy.contains(userId)) {
       return withLikeRemoved(userId);
@@ -116,7 +112,6 @@ class Post {
     }
   }
 
-  // ✅ NOVO: Método para verificar igualdade considerando likedBy
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
@@ -150,7 +145,6 @@ class Post {
       likes,
       comments,
       imageUrl,
-      // ✅ Inclui likedBy no hashCode
       Object.hashAll(likedBy),
       isOptimistic,
       syncFailed,
@@ -158,13 +152,11 @@ class Post {
     );
   }
 
-  // ✅ NOVO: Método toString para debug
   @override
   String toString() {
     return 'Post{id: $id, username: $username, likes: $likes, likedBy: ${likedBy.length} users, isOptimistic: $isOptimistic}';
   }
 
-  // ✅ NOVO: Método para converter para mapa (útil para Firebase)
   Map<String, dynamic> toMap() {
     return {
       'id': id,
@@ -176,14 +168,13 @@ class Post {
       'likes': likes,
       'comments': comments,
       'imageUrl': imageUrl,
-      'likedBy': likedBy, // ✅ Inclui likedBy
+      'likedBy': likedBy, 
       'isOptimistic': isOptimistic,
       'syncFailed': syncFailed,
       'syncError': syncError,
     };
   }
 
-  // ✅ NOVO: Factory para criar a partir de mapa
   factory Post.fromMap(Map<String, dynamic> map) {
     return Post(
       id: map['id'] as String,
