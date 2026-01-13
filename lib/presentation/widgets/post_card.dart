@@ -4,6 +4,7 @@ import 'package:social_feed_app/core/dependency_injection.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 import 'package:social_feed_app/presentation/widgets/universal_image.dart';
 import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/auth_store.dart'; // ✅ Importar AuthStore
 
 class PostCard extends StatelessWidget {
   final Post post;
@@ -46,8 +47,6 @@ class PostCard extends StatelessWidget {
     final postStore = getIt<PostStore>();
     final shouldShowLoading = postStore.shouldShowLoading(post.id);
 
-    // ✅ CORREÇÃO: Mostra "Enviando..." apenas para NOVOS posts otimistas
-    // Não mostra para edições de posts existentes
     if (shouldShowLoading && post.isOptimistic) {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
@@ -81,10 +80,7 @@ class PostCard extends StatelessWidget {
       );
     }
 
-    // ✅ Para posts que estão sendo processados mas NÃO são otimistas (edições)
-    // Não mostra nada - atualização silenciosa
     if (shouldShowLoading && !post.isOptimistic) {
-      // ✅ Edições em andamento - sem feedback visual
       return const SizedBox();
     }
 
@@ -114,9 +110,6 @@ class PostCard extends StatelessWidget {
       );
     }
 
-    // ✅ REMOVIDO: Não mostra mais "Enviado" para posts otimistas já sincronizados
-    // Isso causava confusão e não é necessário
-    
     return const SizedBox();
   }
 
@@ -125,14 +118,69 @@ class PostCard extends StatelessWidget {
     return StatefulBuilder(
       builder: (context, setState) {
         final postStore = getIt<PostStore>();
+        final authStore = getIt<AuthStore>();
         final isActuallyOptimistic = postStore.shouldShowLoading(post.id);
         
-        // ✅ CORREÇÃO: Verificar se o usuário atual é o dono do post
-        final isCurrentUserPost = post.userId == postStore.currentUserId;
-
-        // ✅ CORREÇÃO: Posts são interativos a menos que estejam sendo enviados
-        // Posts com syncFailed ainda podem ser clicáveis (para ver detalhes)
+        // ✅ SOLUÇÃO 1: Usar userId para comparar (mais comum)
+        // Assumindo que authStore.currentUserId retorna o ID do usuário logado
+        final isCurrentUserPost = post.userId == authStore.userId;
+        
+        // ✅ SOLUÇÃO 2: Se você tiver acesso ao email no authStore
+        // Você pode comparar se o username do post é igual ao nome do usuário logado
+        // Mas isso é menos confiável, pois nomes podem se repetir
+        
         final isInteractive = !isActuallyOptimistic;
+
+        // ✅ Determina o nome de usuário correto
+        String getDisplayUsername() {
+          // Verifica se é o usuário atual (opção mais segura)
+          if (isCurrentUserPost) {
+            return 'Você'; // Só mostra "Você" para posts do usuário logado
+          } else if (post.username.isNotEmpty) {
+            return post.username; // Username do post
+          } else {
+            return 'Usuário'; // Fallback
+          }
+        }
+        
+        final displayUsername = getDisplayUsername();
+
+        // ✅ Obtém a primeira letra do username para o avatar
+        String getAvatarInitial() {
+          if (displayUsername.isNotEmpty) {
+            return displayUsername[0].toUpperCase();
+          }
+          return '?';
+        }
+
+        // ✅ Função para obter a cor do avatar baseado no usuário
+        Color? getAvatarColor(BuildContext context) {
+          if (isActuallyOptimistic) {
+            return Colors.blue[100];
+          } else if (isCurrentUserPost) {
+            return Theme.of(context).primaryColor; // Cor primária para "Você"
+          } else {
+            // Gera uma cor consistente baseada no userId ou username
+            final userIdOrUsername = post.userId + post.username;
+            if (userIdOrUsername.isEmpty) return Colors.grey[400];
+            
+            // Hash simples para gerar cor
+            final hash = userIdOrUsername.hashCode;
+            final colors = [
+              Colors.red[400],
+              Colors.blue[400],
+              Colors.green[400],
+              Colors.orange[400],
+              Colors.purple[400],
+              Colors.teal[400],
+              Colors.pink[400],
+              Colors.cyan[400],
+              Colors.indigo[400],
+              Colors.amber[400],
+            ];
+            return colors[hash.abs() % colors.length];
+          }
+        }
 
         return Card(
           margin: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
@@ -148,8 +196,6 @@ class PostCard extends StatelessWidget {
           child: Opacity(
             opacity: isActuallyOptimistic ? 0.9 : 1.0,
             child: InkWell(
-              // ✅ CORREÇÃO: Permitir tap em todos os posts, exceto os que estão sendo enviados
-              // Posts com syncFailed podem ser clicados (para ver detalhes do erro)
               onTap: isActuallyOptimistic ? null : onTap,
               borderRadius: BorderRadius.circular(12),
               child: Padding(
@@ -163,11 +209,9 @@ class PostCard extends StatelessWidget {
                         Stack(
                           children: [
                             CircleAvatar(
-                              backgroundColor: isActuallyOptimistic
-                                  ? Colors.blue[100]
-                                  : Theme.of(context).primaryColor,
+                              backgroundColor: getAvatarColor(context),
                               child: Text(
-                                post.username[0].toUpperCase(),
+                                getAvatarInitial(),
                                 style: TextStyle(
                                   color: isActuallyOptimistic
                                       ? Colors.blue[800]
@@ -193,6 +237,28 @@ class PostCard extends StatelessWidget {
                                   ),
                                 ),
                               ),
+                            // ✅ BADGE para posts do usuário atual
+                            if (isCurrentUserPost && !isActuallyOptimistic)
+                              Positioned(
+                                right: 0,
+                                bottom: 0,
+                                child: Container(
+                                  padding: const EdgeInsets.all(2),
+                                  decoration: BoxDecoration(
+                                    color: Theme.of(context).primaryColor,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 1,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.person,
+                                    size: 8,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ),
                           ],
                         ),
                         const SizedBox(width: 12),
@@ -205,13 +271,15 @@ class PostCard extends StatelessWidget {
                                 crossAxisAlignment: WrapCrossAlignment.center,
                                 children: [
                                   Text(
-                                    post.username,
+                                    displayUsername,
                                     style: TextStyle(
                                       fontWeight: FontWeight.bold,
                                       fontSize: 16,
                                       color: isActuallyOptimistic
                                           ? Colors.blue[800]
-                                          : null,
+                                          : isCurrentUserPost
+                                              ? Theme.of(context).primaryColor
+                                              : null,
                                     ),
                                   ),
                                   _buildStatusIndicator(),
@@ -227,8 +295,6 @@ class PostCard extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // ✅ CORREÇÃO CRÍTICA: Mostrar menu se for dono do post
-                        // E não estiver sendo enviado (isActuallyOptimistic)
                         if (isCurrentUserPost &&
                             !isActuallyOptimistic &&
                             (onEdit != null || onDelete != null))
@@ -301,14 +367,12 @@ class PostCard extends StatelessWidget {
                       ),
                     ],
 
-                    // ✅ CORREÇÃO: Ações disponíveis se não estiver sendo enviado
                     if (showActions && !isActuallyOptimistic) ...[
                       const SizedBox(height: 16),
                       Row(
                         children: [
                           // Botão de curtir
                           InkWell(
-                            // ✅ CORREÇÃO: Curtir disponível sempre, exceto durante envio
                             onTap: isActuallyOptimistic ? null : onLike,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
@@ -322,15 +386,14 @@ class PostCard extends StatelessWidget {
                               ),
                               child: Row(
                                 children: [
-                                  // ✅ BÔNUS: Mostrar cor diferente se já curtiu
                                   Icon(
                                     Icons.thumb_up,
                                     size: 18,
                                     color: post.likedBy.contains(
-                                          postStore.currentUserId,
+                                          authStore.userId, // ✅ Usar authStore
                                         )
-                                        ? Colors.red // Já curtiu
-                                        : Colors.blue[700], // Não curtiu ainda
+                                        ? Colors.red
+                                        : Colors.blue[700],
                                   ),
                                   const SizedBox(width: 6),
                                   Text(
@@ -348,7 +411,6 @@ class PostCard extends StatelessWidget {
 
                           // Botão de comentar
                           InkWell(
-                            // ✅ CORREÇÃO: Comentar disponível sempre, exceto durante envio
                             onTap: isActuallyOptimistic ? null : onComment,
                             borderRadius: BorderRadius.circular(20),
                             child: Container(
@@ -383,7 +445,6 @@ class PostCard extends StatelessWidget {
                       ),
                     ],
 
-                    // Mensagem de erro se falhou
                     if (post.syncFailed && post.syncError != null) ...[
                       const SizedBox(height: 12),
                       Container(
