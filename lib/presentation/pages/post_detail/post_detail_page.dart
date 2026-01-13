@@ -37,13 +37,13 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   void _loadPost() {
-    // Busca o post pelo ID
-    _post = _postStore.posts.firstWhere(
-      (post) => post.id == widget.postId,
-      orElse: () => _postStore.posts.isNotEmpty
-          ? _postStore.posts.first
-          : _createFallbackPost(),
-    );
+    // ✅ MELHORIA: Busca em todas as listas (posts, optimisticPosts)
+    _post = _postStore.findPostById(widget.postId);
+    
+    // Se não encontrou, cria um fallback
+    if (_post == null) {
+      _post = _createFallbackPost();
+    }
   }
 
   Post _createFallbackPost() {
@@ -53,12 +53,33 @@ class _PostDetailPageState extends State<PostDetailPage> {
       username: 'Usuário',
       content: 'Post não encontrado',
       createdAt: DateTime.now(),
-      updatedAt: DateTime.now()
+      updatedAt: DateTime.now(),
+      likes: 0,
+      comments: 0,
+      likedBy: [],
     );
   }
 
+  // ✅ NOVO: Verifica se o usuário atual é dono do post
+  bool get _isCurrentUserPost {
+    return _post?.userId == _postStore.currentUserId;
+  }
+
+  // ✅ NOVO: Verifica se pode editar (é dono e não está sendo enviado)
+  bool get _canEditPost {
+    if (_post == null) return false;
+    return _isCurrentUserPost && 
+           !_postStore.shouldShowLoading(_post!.id) &&
+           !_post!.syncFailed;
+  }
+
+  // ✅ NOVO: Verifica se pode excluir (é dono)
+  bool get _canDeletePost {
+    return _isCurrentUserPost && _post != null;
+  }
+
   void _showEditDialog() {
-    if (_post == null) return;
+    if (_post == null || !_canEditPost) return;
 
     final TextEditingController controller = TextEditingController(
       text: _post!.content,
@@ -118,6 +139,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
   }
 
   void _showDeleteDialog() {
+    if (!_canDeletePost) return;
+
     showDialog(
       context: context,
       builder: (context) {
@@ -156,6 +179,46 @@ class _PostDetailPageState extends State<PostDetailPage> {
     );
   }
 
+  void _sharePost() {
+    // ✅ NOVO: Opção para compartilhar posts de outros usuários
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Post compartilhado!'),
+      ),
+    );
+  }
+
+  void _reportPost() {
+    // ✅ NOVO: Opção para reportar posts inadequados
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Reportar Post'),
+          content: const Text('Deseja reportar este post como inadequado?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Post reportado com sucesso!'),
+                  ),
+                );
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.orange),
+              child: const Text('Reportar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _addComment() {
     if (_commentController.text.trim().isNotEmpty) {
       setState(() {
@@ -164,7 +227,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
         _commentController.clear();
       });
 
-      // Fecha o teclado
       FocusScope.of(context).unfocus();
     }
   }
@@ -186,12 +248,33 @@ class _PostDetailPageState extends State<PostDetailPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Detalhes do Post'),
+        // ✅ CORREÇÃO: Mostra ações diferentes baseado na propriedade
         actions: [
-          IconButton(icon: const Icon(Icons.edit), onPressed: _showEditDialog),
-          IconButton(
-            icon: const Icon(Icons.delete),
-            onPressed: _showDeleteDialog,
-          ),
+          if (_isCurrentUserPost) ...[
+            // ✅ Ações para posts do usuário atual
+            IconButton(
+              icon: const Icon(Icons.edit),
+              onPressed: _canEditPost ? _showEditDialog : null,
+              tooltip: 'Editar post',
+            ),
+            IconButton(
+              icon: const Icon(Icons.delete),
+              onPressed: _canDeletePost ? _showDeleteDialog : null,
+              tooltip: 'Excluir post',
+            ),
+          ] else ...[
+            // ✅ Ações para posts de outros usuários
+            IconButton(
+              icon: const Icon(Icons.share),
+              onPressed: _sharePost,
+              tooltip: 'Compartilhar post',
+            ),
+            IconButton(
+              icon: const Icon(Icons.flag),
+              onPressed: _reportPost,
+              tooltip: 'Reportar post',
+            ),
+          ],
         ],
       ),
       body: Column(
@@ -201,8 +284,38 @@ class _PostDetailPageState extends State<PostDetailPage> {
             child: SingleChildScrollView(
               child: Column(
                 children: [
-                  // Post principal
-                  PostCard(post: _post!, showActions: false),
+                  // ✅ Post principal com ações desabilitadas (já temos na AppBar)
+                  PostCard(
+                    post: _post!, 
+                    showActions: false,
+                    onTap: null, // Desabilita click no próprio card
+                  ),
+
+                  // ✅ Adiciona indicador de propriedade
+                  if (_isCurrentUserPost)
+                    Container(
+                      margin: const EdgeInsets.symmetric(horizontal: 16),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color.fromARGB(255, 187, 222, 251)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.person, size: 16, color: Colors.blue),
+                          SizedBox(width: 8),
+                          Text(
+                            'Seu post',
+                            style: TextStyle(
+                              color: Colors.blue,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
 
                   // Informações detalhadas
                   Container(
@@ -241,7 +354,55 @@ class _PostDetailPageState extends State<PostDetailPage> {
                           '${_comments.length}',
                         ),
                         const SizedBox(height: 8),
-                        _buildInfoRow(Icons.person, 'Autor:', _post!.username),
+                        _buildInfoRow(
+                          Icons.person, 
+                          'Autor:', 
+                          _post!.username
+                        ),
+                        const SizedBox(height: 8),
+                        _buildInfoRow(
+                          Icons.verified_user,
+                          'Tipo:',
+                          _isCurrentUserPost ? 'Seu post' : 'Post de outro usuário',
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ✅ Seção de ações (botões maiores)
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Observer(
+                            builder: (_) {
+                              return ElevatedButton.icon(
+                                onPressed: _postStore.shouldShowLoading(_post!.id)
+                                    ? null
+                                    : () => _postStore.likePost(_post!.id),
+                                icon: Icon(
+                                  _post!.likedBy.contains(_postStore.currentUserId)
+                                      ? Icons.thumb_up
+                                      : Icons.thumb_up_outlined,
+                                ),
+                                label: Text('Curtir (${_post!.likes})'),
+                              );
+                            },
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: _addComment,
+                            icon: const Icon(Icons.comment),
+                            label: const Text('Comentar'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -252,14 +413,33 @@ class _PostDetailPageState extends State<PostDetailPage> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
-                          'Comentários',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 18,
-                          ),
+                        Row(
+                          children: [
+                            const Text(
+                              'Comentários',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.grey[200],
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                '${_comments.length}',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 12),
 
                         if (_comments.isEmpty)
                           const Padding(
@@ -352,7 +532,6 @@ class _PostDetailPageState extends State<PostDetailPage> {
 
   Widget _buildCommentItem(String comment, int index) {
     final times = ['Há 2 min', 'Há 15 min', 'Há 1 hora', 'Há 3 horas', 'Ontem'];
-
     final users = [
       'João Silva',
       'Maria Santos',
@@ -365,9 +544,8 @@ class _PostDetailPageState extends State<PostDetailPage> {
       username: users[index % users.length],
       comment: comment,
       timeAgo: times[index % times.length],
-      likes: index % 3, // Alguns comentários com curtidas
+      likes: index % 3,
       onLike: () {
-        // Implementar curtida no comentário
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
