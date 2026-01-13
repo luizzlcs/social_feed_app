@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:social_feed_app/core/dependency_injection.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 import 'package:social_feed_app/presentation/widgets/post_card/post_card.dart';
 import 'package:social_feed_app/presentation/pages/post_detail/widgets/post_info_card.dart';
 import 'package:social_feed_app/presentation/pages/post_detail/widgets/post_actions_buttons.dart';

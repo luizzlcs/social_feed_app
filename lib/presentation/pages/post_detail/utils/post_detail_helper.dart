@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:intl/intl.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 
 class PostDetailHelper {
   String formatDateTime(DateTime dateTime) {

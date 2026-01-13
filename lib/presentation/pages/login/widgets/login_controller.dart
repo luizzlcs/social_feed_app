@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:social_feed_app/core/dependency_injection.dart';
 import 'package:social_feed_app/presentation/pages/feed/feed_page.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 
 class LoginController {
   final GlobalKey<FormState> formKey = GlobalKey<FormState>();

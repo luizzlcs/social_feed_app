@@ -9,10 +9,8 @@ class Post {
   final int comments;
   final String? imageUrl;
   
-  // ✅ ATUALIZADO: Lista de usuários que curtiram
   final List<String> likedBy;
   
-  // ✅ Flags para UI otimista
   final bool isOptimistic;
   final bool syncFailed;
   final String? syncError;
@@ -186,7 +184,7 @@ class Post {
       likes: (map['likes'] ?? 0) as int,
       comments: (map['comments'] ?? 0) as int,
       imageUrl: map['imageUrl'] as String?,
-      likedBy: List<String>.from(map['likedBy'] ?? []), // ✅ Converte lista
+      likedBy: List<String>.from(map['likedBy'] ?? []),
       isOptimistic: (map['isOptimistic'] ?? false) as bool,
       syncFailed: (map['syncFailed'] ?? false) as bool,
       syncError: map['syncError'] as String?,

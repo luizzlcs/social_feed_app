@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 
 class ScrollHandler {
   final ScrollController controller;
