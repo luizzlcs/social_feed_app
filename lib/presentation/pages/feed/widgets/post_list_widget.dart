@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_mobx/flutter_mobx.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 import 'package:social_feed_app/presentation/widgets/post_card/post_card.dart';
 
 class PostListWidget extends StatelessWidget {

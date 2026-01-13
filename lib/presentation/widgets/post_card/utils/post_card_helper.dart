@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 import 'package:social_feed_app/core/dependency_injection.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
 
 class PostCardHelper {
@@ -94,9 +94,9 @@ class PostCardHelper {
   /// Obtém a borda do card
   BorderSide getCardBorder(Post post, bool isActuallyOptimistic) {
     if (post.syncFailed) {
-      return BorderSide(color: Colors.red.withOpacity(0.3));
+      return BorderSide(color: Colors.red.withValues(alpha: 77));
     } else if (isActuallyOptimistic) {
-      return BorderSide(color: Colors.blue.withOpacity(0.3));
+      return BorderSide(color: Colors.blue.withValues(alpha: 77));
     }
     return BorderSide.none; // IMPORTANTE: BorderSide.none em vez de null
   }

@@ -4,7 +4,7 @@ import 'package:social_feed_app/core/dependency_injection.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 import 'package:social_feed_app/presentation/pages/post_detail/post_detail_page.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart';
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart';
 import 'package:social_feed_app/presentation/pages/feed/widgets/feed_app_bar.dart';
 import 'package:social_feed_app/presentation/pages/feed/widgets/feed_error_widget.dart';
 import 'package:social_feed_app/presentation/pages/feed/widgets/feed_empty_state.dart';
@@ -113,11 +113,11 @@ class _FeedPageState extends State<FeedPage> {
   }
 
   Widget _buildBody() {
-    if (_postStore.isLoading && _postStore.posts.isEmpty) {
+    if (_postStore.isLoading && _postStore.allPosts.isEmpty) {
       return const FeedLoadingWidget();
     }
 
-    if (_postStore.errorMessage != null && _postStore.posts.isEmpty) {
+    if (_postStore.errorMessage != null && _postStore.allPosts.isEmpty) {
       return FeedErrorWidget(
         errorMessage: _postStore.errorMessage!,
         onRetry: _postStore.loadPosts,

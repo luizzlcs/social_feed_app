@@ -5,7 +5,7 @@ import 'package:social_feed_app/core/themes/app_theme.dart';
 import 'package:social_feed_app/presentation/pages/feed/feed_page.dart';
 import 'package:social_feed_app/presentation/pages/login/login_page.dart';
 import 'package:social_feed_app/presentation/stores/auth_store.dart';
-import 'package:social_feed_app/presentation/stores/post_store.dart'; // ✅ Adicione este import
+import 'package:social_feed_app/presentation/stores/post_store/post_store.dart'; // ✅ Adicione este import
 
 void main() async {
   debugPrint('🚀 Aplicação iniciando...');
@@ -48,17 +48,13 @@ class _AppWrapperState extends State<AppWrapper> {
     _authStore = getIt<AuthStore>();
     _postStore = getIt<PostStore>();
 
-    // ✅ Verifica status de autenticação ao iniciar
     _checkAuthStatus();
   }
 
   Future<void> _checkAuthStatus() async {
-    // Se estiver usando Firebase Auth, descomente:
-    // await _authStore.checkAuthStatus();
-
-    // Para AuthStore simples, só verifica se já está logado
+        
     if (_authStore.isLoggedIn && _authStore.userId != null) {
-      // ✅ CONFIGURAÇÃO IMPORTANTE: Passa userId para PostStore
+      
       _postStore.setCurrentUserId(_authStore.userId!);
     }
 
@@ -76,7 +72,7 @@ class _AppWrapperState extends State<AppWrapper> {
     return Observer(
       builder: (_) {
         if (_authStore.isLoggedIn) {
-          // ✅ CORRIGIDO: Usa getter público em vez de campo privado
+          
           if (_authStore.userId != null && _postStore.currentUserId == null) {
             _postStore.setCurrentUserId(_authStore.userId!);
           }
