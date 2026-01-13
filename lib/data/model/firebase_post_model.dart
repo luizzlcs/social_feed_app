@@ -12,6 +12,9 @@ class FirebasePostModel {
   final int likes;
   final int comments;
   final Map<String, dynamic>? location;
+  
+  // ✅ ADICIONAR: Campo likedBy do Firebase
+  final List<String> likedBy;
 
   FirebasePostModel({
     required this.id,
@@ -24,9 +27,10 @@ class FirebasePostModel {
     this.likes = 0,
     this.comments = 0,
     this.location,
+    this.likedBy = const [], // ✅ NOVO: Inicializar como lista vazia
   });
 
-  // Converte para Entity
+  // ✅ CORRIGIDO: Converte para Entity com todos os campos
   Post toEntity() {
     return Post(
       id: id,
@@ -38,10 +42,19 @@ class FirebasePostModel {
       updatedAt: updatedAt.toDate(),
       likes: likes,
       comments: comments,
+      
+      // ✅ IMPORTANTE: Converter likedBy do Firebase
+      likedBy: likedBy,
+      
+      // ✅ CRÍTICO: Posts do Firebase NUNCA são otimistas
+      isOptimistic: false,
+      
+      syncFailed: false,
+      syncError: null,
     );
   }
 
-  // Converte de Entity para Firebase Model
+  // ✅ CORRIGIDO: Converte de Entity para Firebase Model
   factory FirebasePostModel.fromEntity(Post post) {
     return FirebasePostModel(
       id: post.id,
@@ -53,10 +66,16 @@ class FirebasePostModel {
       updatedAt: Timestamp.fromDate(post.updatedAt),
       likes: post.likes,
       comments: post.comments,
+      
+      // ✅ IMPORTANTE: Incluir likedBy
+      likedBy: post.likedBy,
+      
+      // ⚠️ NÃO incluir location se não existe no Post entity
+      // location: null,
     );
   }
 
-  // Converte de DocumentSnapshot (versão corrigida)
+  // ✅ CORRIGIDO: Converte de DocumentSnapshot
   factory FirebasePostModel.fromFirestore(
     DocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -73,10 +92,13 @@ class FirebasePostModel {
       likes: (data['likes'] ?? 0).toInt(),
       comments: (data['comments'] ?? 0).toInt(),
       location: data['location'],
+      
+      // ✅ IMPORTANTE: Carregar likedBy do Firebase
+      likedBy: List<String>.from(data['likedBy'] ?? []),
     );
   }
 
-  // Versão alternativa que aceita QueryDocumentSnapshot
+  // ✅ CORRIGIDO: Versão para QueryDocumentSnapshot
   factory FirebasePostModel.fromQueryDocumentSnapshot(
     QueryDocumentSnapshot<Map<String, dynamic>> doc,
   ) {
@@ -93,12 +115,15 @@ class FirebasePostModel {
       likes: (data['likes'] ?? 0).toInt(),
       comments: (data['comments'] ?? 0).toInt(),
       location: data['location'],
+      
+      // ✅ IMPORTANTE: Carregar likedBy do Firebase
+      likedBy: List<String>.from(data['likedBy'] ?? []),
     );
   }
 
-  // Converte para Map (para salvar no Firestore)
+  // ✅ CORRIGIDO: Converte para Map (para salvar no Firestore)
   Map<String, dynamic> toFirestore() {
-    return {
+    final map = <String, dynamic>{
       'userId': userId,
       'username': username,
       'content': content,
@@ -107,7 +132,16 @@ class FirebasePostModel {
       'updatedAt': updatedAt,
       'likes': likes,
       'comments': comments,
-      'location': location,
+      
+      // ✅ IMPORTANTE: Salvar likedBy no Firebase
+      'likedBy': likedBy,
     };
+    
+    // Adicionar location apenas se não for null
+    if (location != null) {
+      map['location'] = location;
+    }
+    
+    return map;
   }
 }

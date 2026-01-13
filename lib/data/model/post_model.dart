@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:social_feed_app/domain/entities/post.dart';
 
 class PostModel {
